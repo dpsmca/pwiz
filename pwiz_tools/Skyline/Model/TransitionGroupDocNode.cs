@@ -24,6 +24,7 @@ using System.Linq;
 using pwiz.Common.Chemistry;
 using pwiz.Common.SystemUtil;
 using pwiz.Skyline.Controls.SeqNode;
+using pwiz.Skyline.Model.ComplexPrecursors;
 using pwiz.Skyline.Model.Crosslinking;
 using pwiz.Skyline.Model.DocSettings;
 using pwiz.Skyline.Model.Lib;
@@ -111,6 +112,13 @@ namespace pwiz.Skyline.Model
         }
 
         public TransitionGroup TransitionGroup { get { return (TransitionGroup) Id; }}
+
+        public ComplexPrecursor ComplexPrecursor { get; private set; }
+
+        public TransitionGroupDocNode ChangeComplexPrecursor(ComplexPrecursor complexPrecursor)
+        {
+            return ChangeProp(ImClone(this), im => im.ComplexPrecursor = complexPrecursor);
+        }
 
         [TrackChildren(ignoreName:true, defaultValues:typeof(DefaultValuesNullOrEmpty))]
         public IEnumerable<TransitionDocNode> Transitions { get { return Children.Cast<TransitionDocNode>(); } }
