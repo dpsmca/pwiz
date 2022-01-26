@@ -106,6 +106,7 @@
     <Compile Include="IterationListenerToMonitor.cs" />
     <Compile Include="MsDataFileImpl.cs" />
     <Compile Include="MsDataFileInfo.cs" />
+    <Compile Include="PrecursorsByMsLevel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup Condition=" '$(Platform)' == 'x64' ">

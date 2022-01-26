@@ -1126,8 +1126,7 @@ namespace pwiz.Skyline.Model
 
         public TransitionDocNode ChangeTransitionGroup(TransitionGroup newTransitionGroup)
         {
-            return ChangeTransitionId(new Transition(newTransitionGroup, Transition.IonType, Transition.CleavageOffset,
-                Transition.MassIndex, Transition.Adduct, Transition.DecoyMassShift, Transition.CustomIon));
+            return ChangeTransitionId(Transition.ChangeTransitionGroup(newTransitionGroup));
         }
 
         public TransitionDocNode ChangeTransitionId(Transition transition)

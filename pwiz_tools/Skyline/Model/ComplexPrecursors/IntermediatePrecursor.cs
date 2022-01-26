@@ -1,24 +1,36 @@
 ﻿
+using System;
+using System.Xml;
+using System.Xml.Schema;
+using System.Xml.Serialization;
+using pwiz.Common.Chemistry;
 using pwiz.Common.SystemUtil;
+using pwiz.Skyline.Model.Crosslinking;
 using pwiz.Skyline.Model.DocSettings;
+using pwiz.Skyline.Model.Serialization;
+using pwiz.Skyline.Util;
 
 namespace pwiz.Skyline.Model.ComplexPrecursors
 {
     public class IntermediatePrecursor : Immutable
     {
-        public IntermediatePrecursor(Transition transition, TransitionLosses losses)
+        public IntermediatePrecursor(int msLevel, ComplexFragmentIon complexFragmentIon)
         {
-            Transition = transition;
-            Losses = losses;
+            if (complexFragmentIon == null)
+            {
+                throw new ArgumentNullException(nameof(complexFragmentIon));
+            }
+            MsLevel = msLevel;
+            ComplexFragmentIon = complexFragmentIon;
         }
 
-        public Transition Transition { get; private set; }
+        public int MsLevel { get; private set; }
 
-        public TransitionLosses Losses { get; private set; }
+        public ComplexFragmentIon ComplexFragmentIon { get; private set; }
 
         protected bool Equals(IntermediatePrecursor other)
         {
-            return Transition.Equals(other.Transition) && Equals(Losses, other.Losses);
+            return ComplexFragmentIon.Equals(other.ComplexFragmentIon) && Equals(MsLevel, other.MsLevel);
         }
 
         public override bool Equals(object obj)
@@ -33,8 +45,93 @@ namespace pwiz.Skyline.Model.ComplexPrecursors
         {
             unchecked
             {
-                return (Transition.GetHashCode() * 397) ^ (Losses?.GetHashCode() ?? 0);
+                return (ComplexFragmentIon.GetHashCode() * 397) ^ MsLevel.GetHashCode();
             }
         }
+
+        public SignedMz CalculateMz(SrmSettings settings, ExplicitMods explicitMods)
+        {
+            var mass = ComplexFragmentIon.GetFragmentMass(settings, explicitMods);
+            return new SignedMz(ComplexFragmentIon.PrimaryTransition.Adduct.MzFromNeutralMass(mass));
+        }
+#if false
+        private IntermediatePrecursor()
+        {
+
+        }
+        public XmlSchema GetSchema()
+        {
+            return null;
+        }
+
+        public void ReadXml(XmlReader reader)
+        {
+            if (ComplexFragmentIon != null)
+            {
+                throw new InvalidOperationException();
+            }
+
+            MsLevel = reader.GetIntAttribute(ATTR.ms_level);
+
+        }
+
+        private enum ATTR
+        {
+            fragment_type,
+            measured_ion_name,
+            decoy_mass_shift,
+            mass_index,
+            fragment_ordinal,
+            product_charge,
+            orphaned_crosslink_ion,
+            ms_level
+        }
+
+        public void WriteXml(XmlWriter writer)
+        {
+            var transition = ComplexFragmentIon.PrimaryTransition;
+            writer.WriteAttribute(ATTR.ms_level, MsLevel);
+            writer.WriteAttribute(ATTR.fragment_type, transition.IonType);
+            if (transition.IsCustom())
+            {
+                if (!(transition.CustomIon is SettingsCustomIon))
+                {
+                    transition.CustomIon.WriteXml(writer, transition.Adduct);
+                }
+                else
+                {
+                    writer.WriteAttributeString(ATTR.measured_ion_name, transition.CustomIon.Name);
+                }
+            }
+            writer.WriteAttributeNullable(ATTR.decoy_mass_shift, transition.DecoyMassShift);
+            // NOTE: MassIndex is the peak index in the isotopic distribution of the precursor.
+            //       0 for monoisotopic peaks and for non "precursor" ion types.
+            if (transition.MassIndex != 0)
+                writer.WriteAttribute(ATTR.mass_index, transition.MassIndex);
+            if (!transition.IsCustom())
+            {
+                writer.WriteAttribute(ATTR.fragment_ordinal, transition.Ordinal);
+            }
+            writer.WriteAttribute(ATTR.product_charge, transition.Charge);
+            if (ComplexFragmentIon.IsOrphan)
+            {
+                writer.WriteAttribute(ATTR.orphaned_crosslink_ion, true);
+            }
+            DocumentWriter.WriteTransitionLosses(writer, ComplexFragmentIon.Losses);
+            DocumentWriter.WriteLinkedIons(writer, ComplexFragmentIon.NeutralFragmentIon);
+        }
+#endif
+    }
+
+    public struct IntermediatePrecursorMz
+    {
+        public IntermediatePrecursorMz(int msLevel, SignedMz mz)
+        {
+            MsLevel = msLevel;
+            Mz = mz;
+        }
+
+        public int MsLevel { get; }
+        public SignedMz Mz { get; }
     }
 }

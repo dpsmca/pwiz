@@ -28,6 +28,7 @@ using pwiz.Common.Collections;
 using pwiz.Common.SystemUtil;
 using pwiz.ProteomeDatabase.API;
 using pwiz.Skyline.Model.AuditLog;
+using pwiz.Skyline.Model.ComplexPrecursors;
 using pwiz.Skyline.Model.Crosslinking;
 using pwiz.Skyline.Model.DocSettings;
 using pwiz.Skyline.Model.GroupComparison;
@@ -88,6 +89,35 @@ namespace pwiz.Skyline.Model.Serialization
             return new PeptideChromInfo(fileInfo.FileId, peakCountRatio, retentionTime, ImmutableList<PeptideLabelRatio>.EMPTY)
                 .ChangeExcludeFromCalibration(excludeFromCalibration)
                 .ChangeAnalyteConcentration(analyteConcentration);
+        }
+
+        private IntermediatePrecursor ReadIntermediatePrecursors(XmlReader reader, TransitionGroup transitionGroup)
+        {
+            int msLevel = reader.GetIntAttribute(ATTR.ms_level);
+            IonType ionType = reader.GetEnumAttribute(ATTR.fragment_type, IonType.custom);
+            var fragmentOrdinal = reader.GetIntAttribute(ATTR.fragment_ordinal);
+            var charge = reader.GetIntAttribute(ATTR.product_charge);
+            int cleavageOffset =
+                Transition.OrdinalToOffset(ionType, fragmentOrdinal, transitionGroup.Peptide.Sequence.Length);
+            var transition = new Transition(transitionGroup, ionType, cleavageOffset, 0,
+                Adduct.FromChargeProtonated(charge), null, null);
+            return new IntermediatePrecursor(msLevel, ComplexFragmentIon.Simple(transition, null));
+            // if (ionType == IonType.custom)
+            // {
+            //     string measuredIonName = reader.GetAttribute(ATTR.measured_ion_name);
+            //     MeasuredIon measuredIon = null;
+            //     if (measuredIonName != null)
+            //     {
+            //         measuredIon = Settings.TransitionSettings.Filter.MeasuredIons.SingleOrDefault(
+            //             i => i.Name.Equals(measuredIonName));
+            //         if (measuredIon == null)
+            //             throw new InvalidDataException(String.Format(Resources.TransitionInfo_ReadXmlAttributes_The_reporter_ion__0__was_not_found_in_the_transition_filter_settings_, measuredIonName));
+            //     }
+            //     else
+            //     {
+            //         var customIon = 
+            //     }
+            // }
         }
 
         private SpectrumHeaderInfo ReadTransitionGroupLibInfo(XmlReader reader)

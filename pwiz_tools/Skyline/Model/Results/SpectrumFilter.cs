@@ -272,7 +272,9 @@ namespace pwiz.Skyline.Model.Results
                         SpectrumFilterPair filter;
                         var textId = nodePep.ModifiedTarget; // Modified Sequence for peptides, or some other string for custom ions
                         var mz = new SignedMz(nodeGroup.PrecursorMz, nodeGroup.PrecursorCharge < 0);
-                        var key = new PrecursorTextId(mz, ionMobilityFilter, textId, ChromExtractor.summed);
+                        var intermediatePrecursors =
+                            nodeGroup.GetIntermediatePrecursorMzs(document.Settings, nodePep.ExplicitMods);
+                        var key = new PrecursorTextId(mz, intermediatePrecursors, ionMobilityFilter, textId, ChromExtractor.summed);
                         if (!dictPrecursorMzToFilter.TryGetValue(key, out filter))
                         {
                             filter = new SpectrumFilterPair(key, nodePep.Color, dictPrecursorMzToFilter.Count, minTime, maxTime,
@@ -837,48 +839,62 @@ namespace pwiz.Skyline.Model.Results
             if (!EnabledMsMs || !retentionTime.HasValue || !spectra.Any())
                 yield break;
 
-            var handlingType = _fullScan.IsolationScheme == null || _fullScan.IsolationScheme.SpecialHandling == null
-                ? IsolationScheme.SpecialHandlingType.NONE
-                : _fullScan.IsolationScheme.SpecialHandling;
-            bool ignoreIso = handlingType == IsolationScheme.SpecialHandlingType.OVERLAP ||
-                             handlingType == IsolationScheme.SpecialHandlingType.OVERLAP_MULTIPLEXED ||
-                             handlingType == IsolationScheme.SpecialHandlingType.FAST_OVERLAP;
-
             var pasefAwareFilter = new DiaPasefAwareFilter(spectra, _acquisitionMethod);
             var firstSpectrum = spectra.First();
-            foreach (var isoWin in GetIsolationWindows(firstSpectrum.GetPrecursorsByMsLevel(1)))
+            foreach (var isoWinFilterPair in FindFilterPairs(firstSpectrum.PrecursorsByMsLevel))
             {
-                foreach (var filterPair in FindFilterPairs(isoWin, _acquisitionMethod, ignoreIso))
+                var isoWin = isoWinFilterPair.Key;
+                var filterPair = isoWinFilterPair.Value;
+
+                if (!filterPair.ContainsRetentionTime(retentionTime.Value))
+                    continue;
+                if (pasefAwareFilter.PreFilter(filterPair, isoWin, firstSpectrum))
+                    continue;
+                if (filterPair.ScanDescriptionFilter != null)
                 {
-                    if (!filterPair.ContainsRetentionTime(retentionTime.Value))
-                        continue;
-                    if (pasefAwareFilter.PreFilter(filterPair, isoWin, firstSpectrum))
-                        continue;
-                    if (filterPair.ScanDescriptionFilter != null)
+                    if (firstSpectrum.ScanDescription != null &&
+                        firstSpectrum.ScanDescription.StartsWith(SUREQUANT_SCAN_DESCRIPTION_PREFIX))
                     {
-                        if (firstSpectrum.ScanDescription != null &&
-                            firstSpectrum.ScanDescription.StartsWith(SUREQUANT_SCAN_DESCRIPTION_PREFIX))
+                        if (firstSpectrum.ScanDescription != filterPair.ScanDescriptionFilter)
                         {
-                            if (firstSpectrum.ScanDescription != filterPair.ScanDescriptionFilter)
-                            {
-                                continue;
-                            }
+                            continue;
                         }
                     }
-
-                    // This line does the bulk of the work of pulling chromatogram points from spectra
-                    var filteredSrmSpectrum = filterPair.FilterQ3SpectrumList(spectra, UseDriftTimeHighEnergyOffset());
-
-                    filteredSrmSpectrum = pasefAwareFilter.Filter(filteredSrmSpectrum, filterPair, isoWin);
-                    if (filteredSrmSpectrum != null)
-                        yield return filteredSrmSpectrum;
                 }
+
+                // This line does the bulk of the work of pulling chromatogram points from spectra
+                var filteredSrmSpectrum = filterPair.FilterQ3SpectrumList(spectra, UseDriftTimeHighEnergyOffset());
+
+                filteredSrmSpectrum = pasefAwareFilter.Filter(filteredSrmSpectrum, filterPair, isoWin);
+                if (filteredSrmSpectrum != null)
+                    yield return filteredSrmSpectrum;
             }
 
             foreach (var accumulatedSpectrum in pasefAwareFilter.AccumulatedSpectra)
             {
                 yield return accumulatedSpectrum;
             }
+        }
+
+        IEnumerable<KeyValuePair<IsolationWindowFilter, SpectrumFilterPair>> FindFilterPairs(PrecursorsByMsLevel precursorsByMsLevel)
+        {
+            var handlingType = _fullScan.IsolationScheme?.SpecialHandling ?? IsolationScheme.SpecialHandlingType.NONE;
+            bool ignoreIso = handlingType == IsolationScheme.SpecialHandlingType.OVERLAP ||
+                             handlingType == IsolationScheme.SpecialHandlingType.OVERLAP_MULTIPLEXED ||
+                             handlingType == IsolationScheme.SpecialHandlingType.FAST_OVERLAP;
+            if (precursorsByMsLevel.HighestMsLevel <= 1)
+            {
+                return GetIsolationWindows(precursorsByMsLevel.GetPrecursors(1)).SelectMany(isoWin =>
+                    FindFilterPairs(isoWin, _acquisitionMethod, ignoreIso).Select(filterPair =>
+                        new KeyValuePair<IsolationWindowFilter, SpectrumFilterPair>(isoWin, filterPair)));
+            }
+
+            return _filterMzValues
+                .Where(filterPair =>
+                    filterPair.MatchesPrecursorsByMsLevel(precursorsByMsLevel, _instrument.MzMatchTolerance))
+                .Select(filterPair =>
+                    new KeyValuePair<IsolationWindowFilter, SpectrumFilterPair>(default(IsolationWindowFilter),
+                        filterPair));
         }
 
         private class DiaPasefAwareFilter
@@ -1130,9 +1146,20 @@ namespace pwiz.Skyline.Model.Results
                     int iFilter = IndexOfFilter(isoTargMz, isoTargWidth.Value);
                     if (iFilter != -1)
                     {
-                        while (iFilter < _filterMzValues.Length && CompareMz(isoTargMz,
-                            _filterMzValues[iFilter].Q1, isoTargWidth.Value) == 0)
-                            filterPairs.Add(_filterMzValues[iFilter++]);
+                        for (;iFilter < _filterMzValues.Length; iFilter++)
+                        {
+                            var filterPair = _filterMzValues[iFilter];
+                            if (CompareMz(isoTargMz,
+                                    filterPair.Q1, isoTargWidth.Value) != 0)
+                            {
+                                break;
+                            }
+
+                            if (!filterPair.IntermediatePrecursors.Any())
+                            {
+                                filterPairs.Add(filterPair);
+                            }
+                        }
                     }
                 }
             }

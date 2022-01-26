@@ -42,6 +42,7 @@ namespace pwiz.Skyline.Model.Crosslinking
             ExplicitMods explicitMods) : this(primaryTransition, complexFragmentIon, new PeptideStructure(primaryTransition.Group.Peptide, explicitMods))
         {
         }
+
         public Transition PrimaryTransition { get; private set; }
         public NeutralFragmentIon NeutralFragmentIon { get; private set; }
 

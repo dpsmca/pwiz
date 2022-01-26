@@ -22,6 +22,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using pwiz.Common.Chemistry;
+using pwiz.Common.Collections;
 using pwiz.Common.SystemUtil;
 using pwiz.Skyline.Controls.SeqNode;
 using pwiz.Skyline.Model.ComplexPrecursors;
@@ -109,15 +110,23 @@ namespace pwiz.Skyline.Model
             Results = group.Results;
             ExplicitValues = group.ExplicitValues ?? ExplicitTransitionGroupValues.EMPTY;
             PrecursorConcentration = group.PrecursorConcentration;
+            IntermediatePrecursors = ImmutableList<IntermediatePrecursor>.EMPTY;
         }
 
         public TransitionGroup TransitionGroup { get { return (TransitionGroup) Id; }}
 
-        public ComplexPrecursor ComplexPrecursor { get; private set; }
+        public ImmutableList<IntermediatePrecursor> IntermediatePrecursors { get; private set; }
 
-        public TransitionGroupDocNode ChangeComplexPrecursor(ComplexPrecursor complexPrecursor)
+        public IEnumerable<IntermediatePrecursorMz> GetIntermediatePrecursorMzs(SrmSettings settings, ExplicitMods explicitMods)
         {
-            return ChangeProp(ImClone(this), im => im.ComplexPrecursor = complexPrecursor);
+            return IntermediatePrecursors.Select(ip =>
+                new IntermediatePrecursorMz(ip.MsLevel, ip.CalculateMz(settings, explicitMods)));
+        }
+
+        public TransitionGroupDocNode ChangeIntermediatePrecursors(IEnumerable<IntermediatePrecursor> intermediatePrecursors)
+        {
+            return ChangeProp(ImClone(this),
+                im => im.IntermediatePrecursors = ImmutableList.ValueOf(intermediatePrecursors));
         }
 
         [TrackChildren(ignoreName:true, defaultValues:typeof(DefaultValuesNullOrEmpty))]

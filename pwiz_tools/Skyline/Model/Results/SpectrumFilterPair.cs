@@ -26,6 +26,7 @@ using System.Runtime.CompilerServices;
 using pwiz.Common.Chemistry;
 using pwiz.Common.Collections;
 using pwiz.ProteowizardWrapper;
+using pwiz.Skyline.Model.ComplexPrecursors;
 using pwiz.Skyline.Model.DocSettings;
 using pwiz.Skyline.Util;
 
@@ -45,6 +46,7 @@ namespace pwiz.Skyline.Model.Results
             ModifiedSequence = precursorTextId.Target;
             PeptideColor = peptideColor;
             Q1 = precursorTextId.PrecursorMz;
+            IntermediatePrecursors = precursorTextId.IntermediatePrecursors;
             Extractor = precursorTextId.Extractor;
 
             if (minTime.HasValue)
@@ -81,6 +83,7 @@ namespace pwiz.Skyline.Model.Results
         public Target ModifiedSequence { get; private set; }
         public Color PeptideColor { get; private set; }
         public SignedMz Q1 { get; private set; }
+        public ImmutableList<IntermediatePrecursorMz> IntermediatePrecursors { get; private set; }
         public double? MinTime
         {
             get { return _hasMinTime ? _minTime : (double?) null; }
@@ -474,6 +477,38 @@ namespace pwiz.Skyline.Model.Results
                         s.IonMobilityMeasurementRangeHigh < minIonMobilityValue));
         }
 
+        public bool MatchesPrecursorsByMsLevel(PrecursorsByMsLevel precursorsByMsLevel, double mzMatchTolerance)
+        {
+            foreach (var precursor in IntermediatePrecursors)
+            {
+                if (!precursorsByMsLevel.GetPrecursors(precursor.MsLevel).Any(v =>
+                        v.PrecursorMz.HasValue &&
+                        precursor.Mz.CompareTolerant(v.PrecursorMz.Value, mzMatchTolerance) == 0))
+                {
+                    return false;
+                }
+            }
+
+            for (int msLevel = 1; msLevel < precursorsByMsLevel.HighestMsLevel; msLevel++)
+            {
+                foreach (var precursor in precursorsByMsLevel.GetPrecursors(msLevel))
+                {
+                    if (precursor.PrecursorMz.HasValue)
+                    {
+                        continue;
+                    }
+
+                    if (!IntermediatePrecursors.Any(ip =>
+                            ip.MsLevel == msLevel &&
+                            ip.Mz.CompareTolerant(precursor.PrecursorMz.Value, mzMatchTolerance) == 0))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
     }
 
     internal class IonMobilityRangeHelper

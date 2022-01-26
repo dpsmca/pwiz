@@ -26,6 +26,7 @@ using Google.Protobuf;
 using pwiz.Common.Chemistry;
 using pwiz.Common.Collections;
 using pwiz.ProteomeDatabase.API;
+using pwiz.Skyline.Model.ComplexPrecursors;
 using pwiz.Skyline.Model.Crosslinking;
 using pwiz.Skyline.Model.DocSettings;
 using pwiz.Skyline.Model.Lib;
@@ -571,6 +572,10 @@ namespace pwiz.Skyline.Model.Serialization
                 // Custom ion
                 node.CustomMolecule.WriteXml(writer, group.PrecursorAdduct);
             }
+            foreach (var intermediatePrecursor in node.IntermediatePrecursors)
+            {
+                WriteIntermediatePrecursor(writer, intermediatePrecursor);
+            }
             // Write child elements
             WriteAnnotations(writer, node.Annotations);
             if (node.HasLibInfo)
@@ -605,6 +610,42 @@ namespace pwiz.Skyline.Model.Serialization
                     writer.WriteEndElement();
                 }
             }
+        }
+
+        private void WriteIntermediatePrecursor(XmlWriter writer, IntermediatePrecursor intermediatePrecursor)
+        {
+            writer.WriteStartElement(EL.intermediate_precursor);
+            var transition = intermediatePrecursor.ComplexFragmentIon.PrimaryTransition;
+            writer.WriteAttribute(ATTR.ms_level, intermediatePrecursor.MsLevel);
+            writer.WriteAttribute(ATTR.fragment_type, transition.IonType);
+            if (transition.IsCustom())
+            {
+                if (!(transition.CustomIon is SettingsCustomIon))
+                {
+                    transition.CustomIon.WriteXml(writer, transition.Adduct);
+                }
+                else
+                {
+                    writer.WriteAttributeString(ATTR.measured_ion_name, transition.CustomIon.Name);
+                }
+            }
+            writer.WriteAttributeNullable(ATTR.decoy_mass_shift, transition.DecoyMassShift);
+            // NOTE: MassIndex is the peak index in the isotopic distribution of the precursor.
+            //       0 for monoisotopic peaks and for non "precursor" ion types.
+            if (transition.MassIndex != 0)
+                writer.WriteAttribute(ATTR.mass_index, transition.MassIndex);
+            if (!transition.IsCustom())
+            {
+                writer.WriteAttribute(ATTR.fragment_ordinal, transition.Ordinal);
+            }
+            writer.WriteAttribute(ATTR.product_charge, transition.Charge);
+            if (intermediatePrecursor.ComplexFragmentIon.IsOrphan)
+            {
+                writer.WriteAttribute(ATTR.orphaned_crosslink_ion, true);
+            }
+            WriteTransitionLosses(writer, intermediatePrecursor.ComplexFragmentIon.Losses);
+            WriteLinkedIons(writer, intermediatePrecursor.ComplexFragmentIon.NeutralFragmentIon);
+            writer.WriteEndElement();
         }
 
         private static void WriteTransitionGroupChromInfo(XmlWriter writer, TransitionGroupChromInfo chromInfo)

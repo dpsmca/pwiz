@@ -1394,25 +1394,22 @@ namespace pwiz.ProteowizardWrapper
         private IList<MsPrecursor> GetPrecursors(Spectrum spectrum, int level)
         {
             // return precursors with highest ms level
-            var precursorsByMsLevel = GetPrecursorsByMsLevel(spectrum);
-            if (level > precursorsByMsLevel.Count)
-                return ImmutableList.Empty<MsPrecursor>();
-            return precursorsByMsLevel[level - 1];
+            return GetPrecursorsByMsLevel(spectrum).GetPrecursors(level);
         }
 
-        private static ImmutableList<ImmutableList<MsPrecursor>> GetPrecursorsByMsLevel(Spectrum spectrum)
+        private static PrecursorsByMsLevel GetPrecursorsByMsLevel(Spectrum spectrum)
         {
             bool negativePolarity = NegativePolarity(spectrum);
             int count = spectrum.precursors.Count;
             if (count == 0)
-                return ImmutableList<ImmutableList<MsPrecursor>>.EMPTY;
+                return PrecursorsByMsLevel.EMPTY;
             // Most MS/MS spectra will have a single MS1 precursor
             else if (spectrum.precursors.Count == 1 && GetMsLevel(spectrum.precursors[0]) == 1)
             {
                 var msPrecursor = CreatePrecursor(spectrum.precursors[0], negativePolarity);
-                return ImmutableList.Singleton(ImmutableList.Singleton(msPrecursor));
+                return new PrecursorsByMsLevel(msPrecursor);
             }
-            return ImmutableList.ValueOf(GetPrecursorsByMsLevel(spectrum.precursors, negativePolarity));
+            return new PrecursorsByMsLevel(GetPrecursorsByMsLevel(spectrum.precursors, negativePolarity));
         }
 
         private static IEnumerable<ImmutableList<MsPrecursor>> GetPrecursorsByMsLevel(PrecursorList precursors, bool negativePolarity)
@@ -1715,25 +1712,20 @@ namespace pwiz.ProteowizardWrapper
 
         public ImmutableList<MsPrecursor> GetPrecursorsByMsLevel(int level)
         {
-            if (PrecursorsByMsLevel == null || level > PrecursorsByMsLevel.Count)
-                return ImmutableList<MsPrecursor>.EMPTY;
-            return PrecursorsByMsLevel[level - 1];
+            return PrecursorsByMsLevel.GetPrecursors(level);
         }
 
-        public ImmutableList<ImmutableList<MsPrecursor>> PrecursorsByMsLevel { get; set; }
+        public PrecursorsByMsLevel PrecursorsByMsLevel { get; set; }
 
         public ImmutableList<MsPrecursor> Precursors
         {
             get
             {
-                if (PrecursorsByMsLevel == null || PrecursorsByMsLevel.Count == 0)
-                    return ImmutableList<MsPrecursor>.EMPTY;
-
-                return GetPrecursorsByMsLevel(PrecursorsByMsLevel.Count);
+                return PrecursorsByMsLevel.LastPrecursors();
             }
             set
             {
-                PrecursorsByMsLevel = ImmutableList.Singleton(ImmutableList.ValueOf(value));
+                PrecursorsByMsLevel = new PrecursorsByMsLevel(ImmutableList.Singleton(ImmutableList.ValueOf(value)));
             }
         }
 

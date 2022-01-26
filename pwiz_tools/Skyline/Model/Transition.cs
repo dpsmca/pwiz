@@ -552,6 +552,12 @@ namespace pwiz.Skyline.Model
             Validate();
         }
 
+        public Transition ChangeTransitionGroup(TransitionGroup newTransitionGroup)
+        {
+            return new Transition(newTransitionGroup, IonType, CleavageOffset, MassIndex, Adduct, DecoyMassShift,
+                CustomIon);
+        }
+
         public TransitionGroup Group
         {
             get { return _group; }

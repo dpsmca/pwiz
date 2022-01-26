@@ -18,23 +18,34 @@
  */
 using System.Collections.Generic;
 using pwiz.Common.Chemistry;
+using pwiz.Common.Collections;
+using pwiz.Skyline.Model.ComplexPrecursors;
 using pwiz.Skyline.Model.DocSettings;
 
 namespace pwiz.Skyline.Model.Results
 {
     public struct PrecursorTextId
     {
-        public PrecursorTextId(SignedMz precursorMz, IonMobilityFilter ionMobilityFilter, Target target, ChromExtractor extractor) : this()
+        public PrecursorTextId(SignedMz precursorMz,
+            IonMobilityFilter ionMobilityFilter, Target target, ChromExtractor extractor) : this(precursorMz,
+            ImmutableList.Empty<IntermediatePrecursorMz>(), ionMobilityFilter, target, extractor)
+        {
+        }
+
+        public PrecursorTextId(SignedMz precursorMz, IEnumerable<IntermediatePrecursorMz> intermediatePrecursors,
+            IonMobilityFilter ionMobilityFilter, Target target, ChromExtractor extractor) : this()
         {
             PrecursorMz = precursorMz;
+            IntermediatePrecursors = ImmutableList.ValueOf(intermediatePrecursors);
             IonMobility = ionMobilityFilter ?? IonMobilityFilter.EMPTY;
             Target = target;
             Extractor = extractor;
         }
 
         public SignedMz PrecursorMz { get; private set; }
+        public ImmutableList<IntermediatePrecursorMz> IntermediatePrecursors { get; private set; }
         public IonMobilityFilter IonMobility { get; private set; }
-        public Target Target { get; private set; }  // Peptide Modifed Sequence or custom ion ID
+        public Target Target { get; private set; }  // Peptide Modified Sequence or custom ion ID
         public ChromExtractor Extractor { get; private set; }
 
         #region object overrides
@@ -42,9 +53,10 @@ namespace pwiz.Skyline.Model.Results
         public bool Equals(PrecursorTextId other)
         {
             return PrecursorMz.Equals(other.PrecursorMz) &&
-                Equals(IonMobility, other.IonMobility) &&
-                Equals(Target, other.Target) &&
-                Extractor == other.Extractor;
+                   Equals(IntermediatePrecursors, other.IntermediatePrecursors) &&
+                   Equals(IonMobility, other.IonMobility) &&
+                   Equals(Target, other.Target) &&
+                   Extractor == other.Extractor;
         }
 
         public override bool Equals(object obj)
@@ -58,6 +70,7 @@ namespace pwiz.Skyline.Model.Results
             unchecked
             {
                 int hashCode = PrecursorMz.GetHashCode();
+                hashCode = (hashCode * 397) ^ IntermediatePrecursors.GetHashCode();
                 hashCode = (hashCode * 397) ^ IonMobility.GetHashCode();
                 hashCode = (hashCode * 397) ^ (Target != null ? Target.GetHashCode() : 0);
                 hashCode = (hashCode * 397) ^ (int)Extractor;

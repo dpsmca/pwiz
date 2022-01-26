@@ -81,6 +81,7 @@ namespace pwiz.Skyline.Model.Serialization
             public const string crosslinks = "crosslinks";
             public const string crosslink = "crosslink";
             public const string site = "site";
+            public const string intermediate_precursor = "intermediate_precursor";
             // ReSharper restore LocalizableElement
         }
 
@@ -204,6 +205,7 @@ namespace pwiz.Skyline.Model.Serialization
             public const string points_across = "points_across";
             public const string forced_integration = "forced_integration";
             public const string orphaned_crosslink_ion = "orphaned_crosslink_ion";
+            public const string ms_level = "ms_level";
             // ReSharper restore LocalizableElement
         }
     }
