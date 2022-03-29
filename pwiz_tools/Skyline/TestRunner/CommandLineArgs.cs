@@ -97,7 +97,7 @@ namespace TestRunner
         {
             get
             {
-                return "TestRunner " + _originalArgs.Aggregate("", (current, arg) => current + (arg + " "));
+                return "TestRunner " + _originalArgs.Aggregate("", (current, arg) => current + (arg + "=" + ArgAsString(arg) + " "));
             }
         }
 
