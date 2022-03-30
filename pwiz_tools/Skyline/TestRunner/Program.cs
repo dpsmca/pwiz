@@ -545,6 +545,7 @@ namespace TestRunner
 
         private static long MinBytesPerNormalWorker => MemoryInfo.Gibibyte * 2;
         private static long MinBytesPerBigWorker => MemoryInfo.Gibibyte * 6;
+        //static bool testRequeue = true;
 
         private static string LaunchDockerWorker(int i, CommandLineArgs commandLineArgs, ref string workerNames, bool bigWorker)
         {
@@ -602,6 +603,12 @@ namespace TestRunner
 
                     if (abort || testInfo == null)
                     {
+                        // server test thread will not return until all workers have finished in order to handle requeued tests
+                        if (workerIsAlive.Any(kvp => kvp.Value))
+                        {
+                            Thread.Sleep(1000);
+                            continue;
+                        }
                         done = true;
                         return;
                     }
@@ -727,7 +734,8 @@ namespace TestRunner
 
                                 if (testInfo == null)
                                 {
-                                    done = true;
+                                    // not done until all workers are done (in order to wait for possibled requeued tests)
+                                    //done = true;
                                     if (!isCanceling)
                                         workerSender.TrySendFrame("TestRunnerQuit");
                                     workerIsAlive[workerName] = false;
@@ -762,8 +770,10 @@ namespace TestRunner
                                 }
                                 finally
                                 {
-                                    if (!gotResult && !isCanceling)
+                                    if (/*testRequeue && testInfo.TestMethod.Name == "TestSwathIsolationLists" ||*/ !gotResult && !isCanceling)
                                     {
+                                        //if (testInfo.TestMethod.Name == "TestSwathIsolationLists")
+                                        //    testRequeue = false;
                                         Console.Error.WriteLine($"No result for test {testInfo.TestMethod.Name}; requeuing...");
                                         testQueue.Enqueue(testInfo);
                                     }
@@ -798,6 +808,7 @@ namespace TestRunner
                                 //Console.WriteLine($"Heartbeat from {workerIP}.");
                                 Thread.Sleep(3000);
                             }
+                            workerIsAlive[workerName] = false;
                         }
                     });
                 }
