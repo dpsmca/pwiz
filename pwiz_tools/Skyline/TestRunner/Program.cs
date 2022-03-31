@@ -243,7 +243,7 @@ namespace TestRunner
 
             // Parse command line args and initialize default values.
             var commandLineArgs = new CommandLineArgs(args, commandLineOptions);
-            
+
             switch (commandLineArgs.SearchArgs("?;/?;-?;help;report"))
             {
                 case "?":
@@ -474,7 +474,7 @@ namespace TestRunner
                         {
                             for (int attempts=0; attempts < 3; ++attempts)
                             {
-                                if (!heartbeatReceiver.TrySendFrameEmpty(TimeSpan.FromSeconds(10)))
+                                if (!heartbeatReceiver.TrySendFrameEmpty(TimeSpan.FromSeconds(15)))
                                 {
                                     Console.Error.WriteLine("Server heartbeat could not be sent.");
                                     if (attempts == 2)
@@ -489,7 +489,7 @@ namespace TestRunner
                             Thread.Sleep(3000);
                         }
                     }
-                });
+                }, TaskCreationOptions.LongRunning);
 
                 receiver.ReceiveReady += (s, args) =>
                 {
@@ -502,8 +502,10 @@ namespace TestRunner
                         return;
                     }
 
-                    string testName = msg;
+                    string testName = msg.Split('/')[0];
+                    string testLanguage = msg.Split('/')[1];
                     var cargs = new CommandLineArgs(new[] { "test=" + testName }, commandLineOptions);
+                    commandLineArgs.SetArg("language", testLanguage);
                     var testList = LoadTestList(cargs);
                     using (var testLogStream = new MemoryStream())
                     using (var testLog = new StreamWriter(testLogStream, new UTF8Encoding(false)))
@@ -552,7 +554,7 @@ namespace TestRunner
             var pwizRoot = Path.GetDirectoryName(Path.GetDirectoryName(GetSkylineDirectory().FullName));
 
             var testRunnerCmd = $@"c:\pwiz\pwiz_tools\Skyline\bin\x64\Release\TestRunner.exe parallelmode=client showheader=0 results=c:\AlwaysUpCLT\TestResults log=c:\AlwaysUpCLT\TestRunner.log";
-            foreach (string p in new[] { "perftests", "teamcitytestdecoration", "language" })
+            foreach (string p in new[] { "perftests", "teamcitytestdecoration" })
                 testRunnerCmd += $" {p}={commandLineArgs.ArgAsString(p)}";
 
             long workerBytes = bigWorker ? MinBytesPerBigWorker : MinBytesPerNormalWorker;
@@ -567,11 +569,22 @@ namespace TestRunner
             return workerName;
         }
 
+        private class QueuedTestInfo
+        {
+            public QueuedTestInfo(TestInfo testInfo, string language)
+            {
+                TestInfo = testInfo;
+                Language = language;
+            }
+            public TestInfo TestInfo { get; private set; }
+            public string Language { get; private set; }
+        }
+
         private static bool PushToTestQueue(List<TestInfo> testList, CommandLineArgs commandLineArgs, StreamWriter log)
         {
             var factory = new TaskFactory();
-            var testQueue = new ConcurrentQueue<TestInfo>(testList.Where(t => !t.DoNotRunInParallel));
-            var nonParallelTestQueue = new ConcurrentQueue<TestInfo>(testList.Where(t => t.DoNotRunInParallel));
+            var testQueue = new ConcurrentQueue<QueuedTestInfo>();
+            var nonParallelTestQueue = new ConcurrentQueue<QueuedTestInfo>();
             var workerIsAlive = new ConcurrentDictionary<string, bool>();
             var tasks = new List<Task>();
             var timer = new Stopwatch();
@@ -579,8 +592,9 @@ namespace TestRunner
             int testsResultsReturned = 0;
             int workerCount = (int) commandLineArgs.ArgAsLong("workercount");
             bool done = false;
-
             bool isCanceling = false;
+            var languages = commandLineArgs.ArgAsString("language").Split(',');
+
             Console.CancelKeyPress += (sender, args) =>
             {
                 Console.WriteLine("Ctrl-C pressed: closing server and clients.");
@@ -588,11 +602,18 @@ namespace TestRunner
                 isCanceling = true;
             };
 
+            foreach (var testInfo in testList)
+            {
+                var queue = testInfo.DoNotRunInParallel ? nonParallelTestQueue : testQueue;
+                foreach (var language in languages)
+                    queue.Enqueue(new QueuedTestInfo(testInfo, language));
+            }
+
             // handle big tests on the server
             tasks.Add(factory.StartNew(() => {
                 while (!done)
                 {
-                    TestInfo testInfo = null;
+                    QueuedTestInfo testInfo = null;
                     bool abort = isCanceling;
                     if (!abort)
                     {
@@ -612,12 +633,13 @@ namespace TestRunner
                         done = true;
                         return;
                     }
-                    string testName = testInfo.TestMethod.Name;
+
+                    string testName = testInfo.TestInfo.TestMethod.Name;
                     try
                     {
                         // running RunTestPasses() for GUI tests directly is problematic because we're no longer on the main thread
-                        var testRunnerCmd = $@"test={testName} offscreen=1 showheader=0 log=serverWorker.log loop=1";
-                        foreach (string a in new[] { "perftests", "teamcitytestdecoration", "language" })
+                        var testRunnerCmd = $@"test={testName} offscreen=1 showheader=0 log=serverWorker.log loop=1 language={testInfo.Language}";
+                        foreach (string a in new[] { "perftests", "teamcitytestdecoration" })
                             testRunnerCmd += $" {a}={commandLineArgs.ArgAsString(a)}";
 
                         var psi = new ProcessStartInfo(Assembly.GetExecutingAssembly().Location, testRunnerCmd);
@@ -625,6 +647,7 @@ namespace TestRunner
                         //psi.UseShellExecute = true;
                         psi.CreateNoWindow = false;
                         var p = Process.Start(psi);
+                        p.PriorityClass = ProcessPriorityClass.BelowNormal;
                         while (!p.WaitForExit(1000))
                         {
                             if (isCanceling)
@@ -652,14 +675,14 @@ namespace TestRunner
                         Console.Error.WriteLine(e.ToString());
                     }
                 }
-            }));
+            }, TaskCreationOptions.LongRunning));
 
             string workerNames = null;
             if (workerCount > 0)
             {
                 long availableBytesForNormalWorkers = MemoryInfo.AvailableBytes - MinBytesPerBigWorker;
 
-                int normalWorkerCount = workerCount;// - 1;
+                int normalWorkerCount = workerCount - 1;
                 long normalWorkerBytes = MinBytesPerNormalWorker * normalWorkerCount;
                 long totalWorkerBytes = normalWorkerBytes + MinBytesPerBigWorker;
                 if (availableBytesForNormalWorkers < normalWorkerBytes)
@@ -723,7 +746,7 @@ namespace TestRunner
                                 if (!workerIsAlive[workerName])
                                     return;
 
-                                TestInfo testInfo = null;
+                                QueuedTestInfo testInfo = null;
                                 if (!isCanceling)
                                 {
                                     if (isBigWorker)
@@ -746,7 +769,7 @@ namespace TestRunner
                                 try
                                 {
                                     //Console.WriteLine(testInfo.TestMethod.Name);
-                                    if (!workerSender.TrySendFrame(TimeSpan.FromSeconds(5), testInfo.TestMethod.Name))
+                                    if (!workerSender.TrySendFrame(TimeSpan.FromSeconds(5), testInfo.TestInfo.TestMethod.Name + "/" + testInfo.Language))
                                         continue;
                                     lock (timer) timer.Start();
                                     byte[] result = null;
@@ -774,14 +797,14 @@ namespace TestRunner
                                     {
                                         //if (testInfo.TestMethod.Name == "TestSwathIsolationLists")
                                         //    testRequeue = false;
-                                        Console.Error.WriteLine($"No result for test {testInfo.TestMethod.Name}; requeuing...");
+                                        Console.Error.WriteLine($"No result for test {testInfo.TestInfo.TestMethod.Name}; requeuing...");
                                         testQueue.Enqueue(testInfo);
                                     }
                                 }
                             }
                         }
-                    }));
-                    
+                    }, TaskCreationOptions.LongRunning));
+
                     // start heartbeat for worker
                     factory.StartNew(() => {
                         using (var workerHeartbeat = new PullSocket($">tcp://{workerIP}:5560"))
@@ -810,7 +833,7 @@ namespace TestRunner
                             }
                             workerIsAlive[workerName] = false;
                         }
-                    });
+                    }, TaskCreationOptions.LongRunning);
                 }
 
                 if (isCanceling && workerNames != null)
@@ -1552,7 +1575,7 @@ namespace TestRunner
                 {
                     var test = parts[1];
                     var failureType = parts[2];
-                   
+
                     if (failureType == "LEAKED")
                     {
                         var leakSize = double.Parse(parts[3]);
@@ -1571,7 +1594,7 @@ namespace TestRunner
                         crtLeakList.Add(new LeakingTest { TestName = test, LeakSize = leakSize });
                         continue;
                     }
-                    
+
                     error = "# " + test + " FAILED:\n";
                 }
             }

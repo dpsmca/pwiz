@@ -116,5 +116,10 @@ namespace TestRunner
         {
             return argList.Split(';').FirstOrDefault(HasArg);
         }
+
+        public void SetArg(string argName, string value)
+        {
+            _args[argName] = value;
+        }
     }
 }
