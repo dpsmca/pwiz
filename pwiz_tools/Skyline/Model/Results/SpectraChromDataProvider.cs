@@ -481,6 +481,7 @@ namespace pwiz.Skyline.Model.Results
                     var key = new ChromKey(
                         collector.ModifiedSequence,
                         collector.PrecursorMz,
+                        0,
                         collector.IonMobility,
                         pairProduct.Key.TargetMz,
                         0,

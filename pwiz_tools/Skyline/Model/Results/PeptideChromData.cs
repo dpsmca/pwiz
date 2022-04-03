@@ -913,7 +913,7 @@ namespace pwiz.Skyline.Model.Results
             for (int i = 0; i < DataSets.Count; i++)
             {
                 var firstKey = DataSets[i].FirstKey;
-                if (Equals(chromDataSet.FirstKey.Precursor, firstKey.Precursor)) // Don't merge dissimilar precursors
+                if (Equals(chromDataSet.FirstKey.Precursor, firstKey.Precursor) && Equals(chromDataSet.FirstKey.IntermediatePrecursorHash, firstKey.IntermediatePrecursorHash)) // Don't merge dissimilar precursors
                 {
                     DataSets[i].Merge(chromDataSet);
                 }

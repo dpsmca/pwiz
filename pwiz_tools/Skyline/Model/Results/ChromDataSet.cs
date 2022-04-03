@@ -167,6 +167,15 @@ namespace pwiz.Skyline.Model.Results
         {
             get { return NodeGroups.FirstOrDefault()?.Item2; }
         }
+
+        public long IntermediatePrecursorHash
+        {
+            get
+            {
+                return NodeGroup?.GetIntermediatePrecursorHash() ?? 0;
+            }
+        }
+
         public ImmutableList<Tuple<PeptideDocNode, TransitionGroupDocNode>> NodeGroups { get; set; }
         public IEnumerable<IsotopeLabelType> LabelTypes
         {

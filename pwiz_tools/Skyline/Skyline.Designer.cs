@@ -55,6 +55,7 @@ namespace pwiz.Skyline
             this.modifyPeptideContextMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toggleQuantitativeContextMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.markTransitionsQuantitativeContextMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.addIntermediatePrecursorsContextMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator7 = new System.Windows.Forms.ToolStripSeparator();
             this.editNoteContextMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparatorRatios = new System.Windows.Forms.ToolStripSeparator();
@@ -375,6 +376,7 @@ namespace pwiz.Skyline
             this.modifyPeptideContextMenuItem,
             this.toggleQuantitativeContextMenuItem,
             this.markTransitionsQuantitativeContextMenuItem,
+            this.addIntermediatePrecursorsContextMenuItem,
             this.toolStripSeparator7,
             this.editNoteContextMenuItem,
             this.toolStripSeparatorRatios,
@@ -506,6 +508,12 @@ namespace pwiz.Skyline
             this.markTransitionsQuantitativeContextMenuItem.Name = "markTransitionsQuantitativeContextMenuItem";
             resources.ApplyResources(this.markTransitionsQuantitativeContextMenuItem, "markTransitionsQuantitativeContextMenuItem");
             this.markTransitionsQuantitativeContextMenuItem.Click += new System.EventHandler(this.markTransitionsQuantitativeContextMenuItem_Click);
+            // 
+            // addIntermediatePrecursorsContextMenuItem
+            // 
+            this.addIntermediatePrecursorsContextMenuItem.Name = "addIntermediatePrecursorsContextMenuItem";
+            resources.ApplyResources(this.addIntermediatePrecursorsContextMenuItem, "addIntermediatePrecursorsContextMenuItem");
+            this.addIntermediatePrecursorsContextMenuItem.Click += new System.EventHandler(this.addIntermediatePrecursorsContextMenuItem_Click);
             // 
             // toolStripSeparator7
             // 
@@ -2904,6 +2912,7 @@ namespace pwiz.Skyline
         private System.Windows.Forms.ToolStripMenuItem detectionsYScalePercentToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem massErrorToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem synchMzScaleToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem addIntermediatePrecursorsContextMenuItem;
     }
 }
 

@@ -28,15 +28,16 @@ namespace pwiz.Skyline.Model.Results
     {
         public PrecursorTextId(SignedMz precursorMz,
             IonMobilityFilter ionMobilityFilter, Target target, ChromExtractor extractor) : this(precursorMz,
-            ImmutableList.Empty<IntermediatePrecursorMz>(), ionMobilityFilter, target, extractor)
+            ImmutableList.Empty<IntermediatePrecursorMz>(), 0, ionMobilityFilter, target, extractor)
         {
         }
 
-        public PrecursorTextId(SignedMz precursorMz, IEnumerable<IntermediatePrecursorMz> intermediatePrecursors,
+        public PrecursorTextId(SignedMz precursorMz, IEnumerable<IntermediatePrecursorMz> intermediatePrecursors, long intermediatePrecursorHash,
             IonMobilityFilter ionMobilityFilter, Target target, ChromExtractor extractor) : this()
         {
             PrecursorMz = precursorMz;
             IntermediatePrecursors = ImmutableList.ValueOf(intermediatePrecursors);
+            IntermediatePrecursorHash = intermediatePrecursorHash;
             IonMobility = ionMobilityFilter ?? IonMobilityFilter.EMPTY;
             Target = target;
             Extractor = extractor;
@@ -44,6 +45,7 @@ namespace pwiz.Skyline.Model.Results
 
         public SignedMz PrecursorMz { get; private set; }
         public ImmutableList<IntermediatePrecursorMz> IntermediatePrecursors { get; private set; }
+        public long IntermediatePrecursorHash { get; private set; }
         public IonMobilityFilter IonMobility { get; private set; }
         public Target Target { get; private set; }  // Peptide Modified Sequence or custom ion ID
         public ChromExtractor Extractor { get; private set; }
@@ -94,6 +96,9 @@ namespace pwiz.Skyline.Model.Results
                 if (c != 0)
                     return c;
                 c = Target.CompareOrdinal(x.Target, y.Target);
+                if (c != 0)
+                    return c;
+                c = x.IntermediatePrecursorHash.CompareTo(y.IntermediatePrecursorHash);
                 if (c != 0)
                     return c;
                 return x.Extractor - y.Extractor;

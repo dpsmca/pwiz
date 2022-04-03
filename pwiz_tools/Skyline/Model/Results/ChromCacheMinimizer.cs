@@ -718,7 +718,8 @@ namespace pwiz.Skyline.Model.Results
                                                       originalHeader.StatusRank,
                                                       originalHeader.StartTime, originalHeader.EndTime,
                                                       originalHeader.CollisionalCrossSection, 
-                                                      originalHeader.IonMobilityUnits);
+                                                      originalHeader.IonMobilityUnits,
+                                                      originalHeader.IntermediatePrecursorHash);
                 _chromGroupHeaderInfos.Add(header);
             }
 

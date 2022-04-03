@@ -82,6 +82,7 @@ namespace pwiz.Skyline.Model.Results
         private MsDataSpectrum _mseLastSpectrum;
         private int _mseLastSpectrumLevel; // for averaging Agilent stepped CE spectra
         private bool _sourceHasDeclaredMSnSpectra; // Used in all-ions mode to discern low and high energy scans for Bruker
+        private bool _hasIntermediatePrecursors;
 
         private static readonly PrecursorTextId TIC_KEY = new PrecursorTextId(SignedMz.ZERO, null, null, ChromExtractor.summed);
         private static readonly PrecursorTextId BPC_KEY = new PrecursorTextId(SignedMz.ZERO, null, null, ChromExtractor.base_peak);
@@ -274,7 +275,9 @@ namespace pwiz.Skyline.Model.Results
                         var mz = new SignedMz(nodeGroup.PrecursorMz, nodeGroup.PrecursorCharge < 0);
                         var intermediatePrecursors =
                             nodeGroup.GetIntermediatePrecursorMzs(document.Settings, nodePep.ExplicitMods);
-                        var key = new PrecursorTextId(mz, intermediatePrecursors, ionMobilityFilter, textId, ChromExtractor.summed);
+                        var intermediatePrecursorHash = nodeGroup.GetIntermediatePrecursorHash();
+                        var key = new PrecursorTextId(mz, intermediatePrecursors, intermediatePrecursorHash, ionMobilityFilter, textId, ChromExtractor.summed);
+                        _hasIntermediatePrecursors = _hasIntermediatePrecursors || key.IntermediatePrecursors.Any();
                         if (!dictPrecursorMzToFilter.TryGetValue(key, out filter))
                         {
                             filter = new SpectrumFilterPair(key, nodePep.Color, dictPrecursorMzToFilter.Count, minTime, maxTime,
@@ -1019,7 +1022,10 @@ namespace pwiz.Skyline.Model.Results
         {
             if (!EnabledMsMs || !retentionTime.HasValue || !precursors.Any())
                 return false;
-
+            if (_hasIntermediatePrecursors)
+            {
+                return true;
+            }
             var handlingType = _fullScan.IsolationScheme == null || _fullScan.IsolationScheme.SpecialHandling == null
                 ? IsolationScheme.SpecialHandlingType.NONE
                 : _fullScan.IsolationScheme.SpecialHandling;

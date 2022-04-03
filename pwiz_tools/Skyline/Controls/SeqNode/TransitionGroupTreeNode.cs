@@ -31,6 +31,7 @@ using pwiz.Skyline.Model.Lib;
 using pwiz.Skyline.Model.Results;
 using pwiz.Skyline.Properties;
 using pwiz.Skyline.Util;
+using pwiz.Skyline.Util.Extensions;
 
 namespace pwiz.Skyline.Controls.SeqNode
 {
@@ -165,8 +166,13 @@ namespace pwiz.Skyline.Controls.SeqNode
         
         public static string DisplayText(TransitionGroupDocNode nodeGroup, DisplaySettings settings)
         {
+            string resultsText = GetResultsText(settings, nodeGroup);
+            if (nodeGroup.IntermediatePrecursors.Any())
+            {
+                resultsText = TextUtil.SpaceSeparate(string.Join(",", nodeGroup.IntermediatePrecursors), resultsText);
+            }
             return GetLabel(nodeGroup.TransitionGroup, nodeGroup.PrecursorMz,
-                GetResultsText(settings, nodeGroup));
+                resultsText);
         }
 
         private const string DOTP_FORMAT = "0.##";

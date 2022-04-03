@@ -1,13 +1,12 @@
 ﻿
 using System;
-using System.Xml;
-using System.Xml.Schema;
-using System.Xml.Serialization;
+using System.Collections.Generic;
+using System.Linq;
 using pwiz.Common.Chemistry;
+using pwiz.Common.Collections;
 using pwiz.Common.SystemUtil;
 using pwiz.Skyline.Model.Crosslinking;
 using pwiz.Skyline.Model.DocSettings;
-using pwiz.Skyline.Model.Serialization;
 using pwiz.Skyline.Util;
 
 namespace pwiz.Skyline.Model.ComplexPrecursors
@@ -53,6 +52,16 @@ namespace pwiz.Skyline.Model.ComplexPrecursors
         {
             var mass = ComplexFragmentIon.GetFragmentMass(settings, explicitMods);
             return new SignedMz(ComplexFragmentIon.PrimaryTransition.Adduct.MzFromNeutralMass(mass));
+        }
+
+        public override string ToString()
+        {
+            string result = ComplexFragmentIon.GetFragmentIonName() + Transition.GetMassIndexText(ComplexFragmentIon.PrimaryTransition.MassIndex) + Transition.GetChargeIndicator(ComplexFragmentIon.Adduct);
+            if (MsLevel == 2)
+            {
+                return result;
+            }
+            return string.Format("MsLevel {0}:", MsLevel) + result;
         }
 #if false
         private IntermediatePrecursor()
@@ -121,6 +130,35 @@ namespace pwiz.Skyline.Model.ComplexPrecursors
             DocumentWriter.WriteLinkedIons(writer, ComplexFragmentIon.NeutralFragmentIon);
         }
 #endif
+        public static SrmDocument AddIntermediatePrecursors(SrmDocument document,
+            IdentityPath transitionGroupIdentityPath, ICollection<Transition> transitions)
+        {
+            var peptideDocNode = (PeptideDocNode) document.FindNode(transitionGroupIdentityPath.Parent);
+            var transitionGroupDocNode = (TransitionGroupDocNode) peptideDocNode.FindNode(transitionGroupIdentityPath.Child);
+            int newMsLevel;
+            if (transitionGroupDocNode.IntermediatePrecursors.Any())
+            {
+                newMsLevel = transitionGroupDocNode.IntermediatePrecursors.Max(ip => ip.MsLevel) + 1;
+            }
+            else
+            {
+                newMsLevel = 2;
+            }
+            var intermediatePrecursors = new List<IntermediatePrecursor>();
+            foreach (var transition in transitions)
+            {
+                var transitionDocNode = (TransitionDocNode) transitionGroupDocNode.FindNode(transition);
+                var intermediatePrecursor = new IntermediatePrecursor(newMsLevel, transitionDocNode.ComplexFragmentIon);
+                intermediatePrecursors.Add(intermediatePrecursor);
+            }
+
+            var transitionHashSet = transitions.ToHashSet(new IdentityEqualityComparer<Transition>());
+            transitionGroupDocNode = transitionGroupDocNode.ChangeIntermediatePrecursors(intermediatePrecursors);
+            transitionGroupDocNode = (TransitionGroupDocNode) transitionGroupDocNode.ChangeChildren(
+                transitionGroupDocNode.Transitions
+                    .Where(t => !transitionHashSet.Contains(t.Transition)).Cast<DocNode>().ToList());
+            return (SrmDocument) document.ReplaceChild(transitionGroupIdentityPath.Parent, transitionGroupDocNode);
+        }
     }
 
     public struct IntermediatePrecursorMz
@@ -133,5 +171,11 @@ namespace pwiz.Skyline.Model.ComplexPrecursors
 
         public int MsLevel { get; }
         public SignedMz Mz { get; }
+
+        public static long GetHash(IEnumerable<IntermediatePrecursorMz> mzs)
+        {
+            var doubleArray = mzs.OrderBy(mz => mz.Mz).Select(mz => mz.Mz.RawValue).ToArray();
+            return AdlerChecksum.MakeForBuff(PrimitiveArrays.ToBytes(doubleArray));
+        }
     }
 }

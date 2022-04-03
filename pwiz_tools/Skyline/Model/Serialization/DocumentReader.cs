@@ -22,6 +22,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Xml;
+using System.Xml.Linq;
 using Google.Protobuf;
 using pwiz.Common.Chemistry;
 using pwiz.Common.Collections;
@@ -101,6 +102,15 @@ namespace pwiz.Skyline.Model.Serialization
                 Transition.OrdinalToOffset(ionType, fragmentOrdinal, transitionGroup.Peptide.Sequence.Length);
             var transition = new Transition(transitionGroup, ionType, cleavageOffset, 0,
                 Adduct.FromChargeProtonated(charge), null, null);
+            if (reader.IsEmptyElement)
+            {
+                reader.Read();
+            }
+            else
+            {
+                reader.ReadStartElement();
+                reader.ReadEndElement();
+            }
             return new IntermediatePrecursor(msLevel, ComplexFragmentIon.Simple(transition, null));
             // if (ionType == IonType.custom)
             // {
@@ -1346,6 +1356,11 @@ namespace pwiz.Skyline.Model.Serialization
             else
             {
                 reader.ReadStartElement();
+                var intermediatePrecursors = new List<IntermediatePrecursor>();
+                while (reader.IsStartElement(EL.intermediate_precursor))
+                {
+                    intermediatePrecursors.Add(ReadIntermediatePrecursors(reader, group));
+                }
                 var annotations = ReadTargetAnnotations(reader, AnnotationDef.AnnotationTarget.precursor);
                 var libInfo = ReadTransitionGroupLibInfo(reader);
                 var results = ReadTransitionGroupResults(reader);
@@ -1359,6 +1374,10 @@ namespace pwiz.Skyline.Model.Serialization
                                                   results,
                                                   children,
                                                   autoManageChildren);
+                if (intermediatePrecursors.Any())
+                {
+                    nodeGroup = nodeGroup.ChangeIntermediatePrecursors(intermediatePrecursors);
+                }
                 children = ReadTransitionListXml(reader, nodeGroup, mods, pre422ExplicitValues);
 
                 reader.ReadEndElement();

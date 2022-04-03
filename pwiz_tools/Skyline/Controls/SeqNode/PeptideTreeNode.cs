@@ -512,7 +512,7 @@ namespace pwiz.Skyline.Controls.SeqNode
             var nodePep = (PeptideDocNode)DocNode.ChangeChildren(listChildrenNew);
             nodePep.ChangeSettings(DocSettings, SrmSettingsDiff.PROPS);
             listChildrenNew = new List<DocNode>(nodePep.Children);
-            MergeChosen(listChildrenNew, useFilter);
+            MergeChosen(listChildrenNew, useFilter, node=> ((TransitionGroupDocNode) node).TransitionGroupKey);
             return listChildrenNew;
         }
 

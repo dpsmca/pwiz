@@ -93,6 +93,7 @@ namespace pwiz.Skyline.Model
             LibInfo = libInfo;
             ExplicitValues = explicitValues ?? ExplicitTransitionGroupValues.EMPTY;
             Results = results;
+            IntermediatePrecursors = ImmutableList<IntermediatePrecursor>.EMPTY;
         }
 
         private TransitionGroupDocNode(TransitionGroupDocNode group,
@@ -116,6 +117,19 @@ namespace pwiz.Skyline.Model
         public TransitionGroup TransitionGroup { get { return (TransitionGroup) Id; }}
 
         public ImmutableList<IntermediatePrecursor> IntermediatePrecursors { get; private set; }
+
+        public TransitionGroupKey TransitionGroupKey
+        {
+            get
+            {
+                return new TransitionGroupKey(TransitionGroup, IntermediatePrecursors);
+            }
+        }
+
+        public long GetIntermediatePrecursorHash()
+        {
+            return IntermediatePrecursors.Count;
+        }
 
         public IEnumerable<IntermediatePrecursorMz> GetIntermediatePrecursorMzs(SrmSettings settings, ExplicitMods explicitMods)
         {

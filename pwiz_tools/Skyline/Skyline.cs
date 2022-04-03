@@ -63,6 +63,7 @@ using pwiz.Skyline.FileUI.PeptideSearch;
 using pwiz.Skyline.Menus;
 using pwiz.Skyline.Model.ElementLocators;
 using pwiz.Skyline.Model.AuditLog;
+using pwiz.Skyline.Model.ComplexPrecursors;
 using pwiz.Skyline.Model.Databinding;
 using pwiz.Skyline.Model.Databinding.Entities;
 using pwiz.Skyline.Model.DocSettings.MetadataExtraction;
@@ -1734,6 +1735,9 @@ namespace pwiz.Skyline
             var nodeTranGroupTree = SequenceTree.SelectedNode as TransitionGroupTreeNode;
             addTransitionMoleculeContextMenuItem.Visible = enabled && nodeTranGroupTree != null &&
                 nodeTranGroupTree.PepNode.Peptide.IsCustomMolecule;
+            addIntermediatePrecursorsContextMenuItem.Visible
+                = SequenceTree.SelectedNodes.Count > 0 &&
+                  SequenceTree.SelectedNodes.All(node => node is TransitionTreeNode);
 
             var selectedQuantitativeValues = SelectedQuantitativeValues();
             if (selectedQuantitativeValues.Length == 0)
@@ -4635,6 +4639,31 @@ namespace pwiz.Skyline
                     modeUIHandler.AddHandledComponent(entry.Key, entry.Value);
                 }
             }
+        }
+
+        private void addIntermediatePrecursorsContextMenuItem_Click(object sender, EventArgs e)
+        {
+            AddIntermediatePrecursors();
+        }
+
+        public void AddIntermediatePrecursors()
+        {
+            var transitionIdentityPaths =
+                SequenceTree.SelectedNodes.OfType<TransitionTreeNode>().Select(node => node.Path).ToList();
+            if (!transitionIdentityPaths.Any())
+            {
+                return;
+            }
+            ModifyDocument("Add intermediate precursors", doc =>
+            {
+                foreach (var grouping in transitionIdentityPaths.GroupBy(path => path.Parent))
+                {
+                    doc = IntermediatePrecursor.AddIntermediatePrecursors(doc, grouping.Key,
+                        grouping.Select(path => (Transition) path.Child).ToList());
+                }
+
+                return doc;
+            }, docPair=>AuditLogEntry.DiffDocNodes(MessageType.add_intermediate_precursors, docPair, false));
         }
     }
 }

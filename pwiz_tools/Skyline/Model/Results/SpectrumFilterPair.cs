@@ -47,6 +47,7 @@ namespace pwiz.Skyline.Model.Results
             PeptideColor = peptideColor;
             Q1 = precursorTextId.PrecursorMz;
             IntermediatePrecursors = precursorTextId.IntermediatePrecursors;
+            IntermediatePrecursorHash = precursorTextId.IntermediatePrecursors.Count;
             Extractor = precursorTextId.Extractor;
 
             if (minTime.HasValue)
@@ -84,6 +85,7 @@ namespace pwiz.Skyline.Model.Results
         public Color PeptideColor { get; private set; }
         public SignedMz Q1 { get; private set; }
         public ImmutableList<IntermediatePrecursorMz> IntermediatePrecursors { get; private set; }
+        public long IntermediatePrecursorHash { get; private set; }
         public double? MinTime
         {
             get { return _hasMinTime ? _minTime : (double?) null; }
@@ -370,6 +372,7 @@ namespace pwiz.Skyline.Model.Results
                     spectrumProductFilter.FilterId = listChromKeys.Count;
                     var key = new ChromKey(ModifiedSequence,
                         Q1,
+                        IntermediatePrecursorHash,
                         ionMobilityFilter.ApplyOffset(highEnergy ? spectrumProductFilter.HighEnergyIonMobilityValueOffset : 0),
                         spectrumProductFilter.TargetMz,
                         0,  // CE value (Shimadzu SRM only)
@@ -489,11 +492,11 @@ namespace pwiz.Skyline.Model.Results
                 }
             }
 
-            for (int msLevel = 1; msLevel < precursorsByMsLevel.HighestMsLevel; msLevel++)
+            for (int msLevel = 2; msLevel < precursorsByMsLevel.HighestMsLevel; msLevel++)
             {
                 foreach (var precursor in precursorsByMsLevel.GetPrecursors(msLevel))
                 {
-                    if (precursor.PrecursorMz.HasValue)
+                    if (!precursor.PrecursorMz.HasValue)
                     {
                         continue;
                     }

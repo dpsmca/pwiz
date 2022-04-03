@@ -116,7 +116,7 @@ namespace pwiz.Skyline.Model.Crosslinking
         }
         public TypedMass GetFragmentMass(SrmSettings settings, ExplicitMods explicitMods)
         {
-            return GetCrosslinkBuilder(settings).GetFragmentMass(NeutralFragmentIon);
+            return GetCrosslinkBuilder(settings, explicitMods).GetFragmentMass(NeutralFragmentIon);
         }
         public TransitionDocNode MakeTransitionDocNode(SrmSettings settings, ExplicitMods explicitMods, IsotopeDistInfo isotopeDist)
         {
@@ -185,6 +185,11 @@ namespace pwiz.Skyline.Model.Crosslinking
             {
                 return NeutralFragmentIon.IsOrphan;
             }
+        }
+
+        public override string ToString()
+        {
+            return GetTargetsTreeLabel() + Transition.GetChargeIndicator(Adduct);
         }
     }
 }

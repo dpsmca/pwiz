@@ -495,8 +495,8 @@ namespace pwiz.Skyline.Model.Results
 
             var dictPeptideChromData = new Dictionary<PeptideSequenceModKey, PeptideChromDataSets>();
             var listChromData = new List<PeptideChromDataSets>();
-
-            foreach (var chromDataSet in GetChromDataSets(provider))
+            var chromDataSets = GetChromDataSets(provider).ToList();
+            foreach (var chromDataSet in chromDataSets)
             {
                 if (chromDataSet == null)
                     continue;
@@ -583,7 +583,9 @@ namespace pwiz.Skyline.Model.Results
         {
             ChromKey lastKey = ChromKey.EMPTY;
             ChromDataSet chromDataSet = null;
-            foreach (var keyIndex in provider.ChromIds.OrderBy(k => k))
+            var chromIds = provider.ChromIds.OrderBy(k => k).ToList();
+
+            foreach (var keyIndex in chromIds)
             {
                 var key = keyIndex.Key;
                 var chromData = new ChromData(key, keyIndex.ProviderId);
@@ -876,12 +878,17 @@ namespace pwiz.Skyline.Model.Results
             // Enumerate all possible matching precursor values, collecting the ones
             // with potentially matching product ions
             var modSeq = chromDataSet.ModifiedSequence;
+            long intermediatePrecursorHash = chromDataSet.FirstKey.IntermediatePrecursorHash;
             var listMatchingGroups = new List<Tuple<PeptidePrecursorMz, ChromDataSet, IList<ChromData>>>();
             for (; i < listMzPrecursors.Count && listMzPrecursors[i].PrecursorMz <= maxMzMatch && listMzPrecursors[i].PrecursorMz.IsNegative == maxMzMatch.IsNegative; i++)
             {
                 var peptidePrecursorMz = listMzPrecursors[i];
                 if (modSeq != null && !Equals(modSeq, peptidePrecursorMz.NodePeptide.ModifiedTarget)) // ModifiedSequence for peptides, other id for customIons
                     continue;
+                if (intermediatePrecursorHash != peptidePrecursorMz.NodeGroup.GetIntermediatePrecursorHash())
+                {
+                    continue;
+                }
 
                 var nodeGroup = peptidePrecursorMz.NodeGroup;
                 var explicitRetentionTimeInfo = peptidePrecursorMz.NodePeptide.ExplicitRetentionTime;
@@ -1372,7 +1379,8 @@ namespace pwiz.Skyline.Model.Results
                 chromDataSet.MaxRawTime,
                 // TODO(version)
                 chromDataSet.CollisionalCrossSectionSqA,
-                chromDataSet.IonMobilityUnits);
+                chromDataSet.IonMobilityUnits,
+                    chromDataSet.IntermediatePrecursorHash);
                 header.CalcTextIdIndex(chromDataSet.ModifiedSequence, _dictSequenceToByteIndex, _listTextIdBytes);
 
                 int? transitionPeakCount = null;

@@ -238,7 +238,7 @@ namespace pwiz.Skyline.Model.Results
                 explicitRT = nodePep.ExplicitRetentionTime.RetentionTime;
             }
 
-            return GetHeaderInfos(nodePep, precursorMz, explicitRT, tolerance, chromatograms);
+            return GetHeaderInfos(nodePep, precursorMz, nodeGroup?.GetIntermediatePrecursorHash()??0, explicitRT, tolerance, chromatograms);
         }
 
         public bool HasAllIonsChromatograms
@@ -290,10 +290,10 @@ namespace pwiz.Skyline.Model.Results
             ReadStream.CloseStream();
         }
 
-        private IEnumerable<ChromatogramGroupInfo> GetHeaderInfos(PeptideDocNode nodePep, SignedMz precursorMz, double? explicitRT, float tolerance,
+        private IEnumerable<ChromatogramGroupInfo> GetHeaderInfos(PeptideDocNode nodePep, SignedMz precursorMz, long intermediatePrecursorHash, double? explicitRT, float tolerance,
             ChromatogramSet chromatograms)
         {
-            foreach (int i in ChromatogramIndexesMatching(nodePep, precursorMz, tolerance, chromatograms))
+            foreach (int i in ChromatogramIndexesMatching(nodePep, precursorMz, intermediatePrecursorHash, tolerance, chromatograms))
             {
                 var entry = ChromGroupHeaderInfos[i];
                 // If explicit retention time info is available, use that to discard obvious mismatches
@@ -308,7 +308,7 @@ namespace pwiz.Skyline.Model.Results
         }
 
         public IEnumerable<int> ChromatogramIndexesMatching(PeptideDocNode nodePep, SignedMz precursorMz,
-            float tolerance, ChromatogramSet chromatograms)
+            long intermediatePrecursorHash, float tolerance, ChromatogramSet chromatograms)
         {
             if (nodePep != null && nodePep.IsProteomic && _chromEntryIndex != null)
             {
@@ -318,6 +318,11 @@ namespace pwiz.Skyline.Model.Results
                 {
                     var entry = ChromGroupHeaderInfos[chromatogramIndex];
                     if (!MatchMz(precursorMz, entry.Precursor, tolerance))
+                    {
+                        continue;
+                    }
+
+                    if (intermediatePrecursorHash != entry.IntermediatePrecursorHash)
                     {
                         continue;
                     }
@@ -345,6 +350,10 @@ namespace pwiz.Skyline.Model.Results
                 var entry = ChromGroupHeaderInfos[i];
                 if (!MatchMz(precursorMz, entry.Precursor, tolerance))
                     break;
+                if (entry.IntermediatePrecursorHash != intermediatePrecursorHash)
+                {
+                    continue;
+                }
                 if (chromatograms != null &&
                     !chromatograms.ContainsFile(_rawData.ChromCacheFiles[entry.FileIndex]
                         .FilePath))
@@ -1190,7 +1199,7 @@ namespace pwiz.Skyline.Model.Results
                         IonMobilityValue.GetIonMobilityValue(tranInfo.IonMobilityValue, units) :
                         ionMobilityValue.ChangeIonMobility(tranInfo.IonMobilityValue); // This likely doesn't change from transition to transition, so reuse it
                     ChromKey key = new ChromKey(_rawData.TextIdBytes, groupInfo.TextIdIndex, groupInfo.TextIdLen,
-                        groupInfo.Precursor, product, extractionWidth, 
+                        groupInfo.Precursor, groupInfo.IntermediatePrecursorHash, product, extractionWidth, 
                         IonMobilityFilter.GetIonMobilityFilter(ionMobilityValue, tranInfo.IonMobilityExtractionWidth, groupInfo.CollisionalCrossSection),
                         source, groupInfo.Extractor, true, true);
 
@@ -1308,7 +1317,8 @@ namespace pwiz.Skyline.Model.Results
                             lastEntry.StartTime,
                             lastEntry.EndTime,
                             lastEntry.CollisionalCrossSection, 
-                            lastEntry.IonMobilityUnits));
+                            lastEntry.IonMobilityUnits,
+                            lastEntry.IntermediatePrecursorHash));
                         int start = lastEntry.StartTransitionIndex;
                         int end = start + lastEntry.NumTransitions;
                         for (int j = start; j < end; j++)
