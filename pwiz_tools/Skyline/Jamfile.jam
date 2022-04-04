@@ -120,6 +120,7 @@ if [ modules.peek : NT ] && --i-agree-to-the-vendor-licenses in [ modules.peek :
         INTERMEDIATE_PATH on $(targets) = "BaseIntermediateOutputPath=$(PWIZ_BUILD_PATH)/obj/" ;
         JAM_SEMAPHORE on $(targets) = "dotNetSemaphore" ;
         MSVC_CURRENT_SETUP_SCRIPT on $(targets) = [ get-current-msvc-setup-script $(properties) ] ;
+        WORKERS on $(targets) = [ CALC [ modules.peek : NUMBER_OF_CORES ] - 2 ] ;
     }
     
     rule do_skyline_build ( targets + : sources * : properties * )
@@ -273,9 +274,8 @@ if [ modules.peek : NT ] && --i-agree-to-the-vendor-licenses in [ modules.peek :
             $(OUTPUT_PATH)TestRunner.exe log=TestFunctional.log buildcheck=1 test=TestFunctional.dll,TestConnected.dll $(.teamcity-test-decoration)
             set status=%ERRORLEVEL%
         ) ELSE (
-            set /a WORKERS=NUMBER_OF_CORES-2
-            echo Functional testing Skyline in $(CONFIGURATION:L) configuration with %WORKERS% Docker workers...
-            $(OUTPUT_PATH)TestRunner.exe log=TestFunctional.log parallelmode=server workercount=%WORKERS% buildcheck=1 test=TestFunctional.dll,TestConnected.dll $(.teamcity-test-decoration)
+            echo Functional testing Skyline in $(CONFIGURATION:L) configuration with $(WORKERS) Docker workers...
+            $(OUTPUT_PATH)TestRunner.exe log=TestFunctional.log parallelmode=server workercount=$(WORKERS) buildcheck=1 test=TestFunctional.dll,TestConnected.dll $(.teamcity-test-decoration)
         )
         exit %status%
     }
