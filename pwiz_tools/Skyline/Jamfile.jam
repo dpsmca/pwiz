@@ -273,7 +273,7 @@ if [ modules.peek : NT ] && --i-agree-to-the-vendor-licenses in [ modules.peek :
             $(OUTPUT_PATH)TestRunner.exe log=TestFunctional.log buildcheck=1 test=TestFunctional.dll,TestConnected.dll $(.teamcity-test-decoration)
             set status=%ERRORLEVEL%
         ) ELSE (
-            set /a WORKERS=%NUMBER_OF_CORES%-2
+            set /a WORKERS=NUMBER_OF_CORES-2
             echo Functional testing Skyline in $(CONFIGURATION:L) configuration with %WORKERS% Docker workers...
             $(OUTPUT_PATH)TestRunner.exe log=TestFunctional.log parallelmode=server workercount=%WORKERS% buildcheck=1 test=TestFunctional.dll,TestConnected.dll $(.teamcity-test-decoration)
         )
