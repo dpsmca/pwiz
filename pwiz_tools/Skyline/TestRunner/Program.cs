@@ -41,7 +41,6 @@ using pwiz.Common.Collections;
 using pwiz.Common.SystemUtil;
 using pwiz.Skyline.Model.Tools;
 using pwiz.Skyline.Util;
-using pwiz.Skyline.Util.Extensions;
 //WARNING: Including TestUtil in this project causes a strange build problem, where the first
 //         build from Visual Studio after a full bjam build removes all of the Skyline project
 //         root files from the Skyline bin directory, leaving it un-runnable until a full
@@ -443,7 +442,6 @@ namespace TestRunner
 
         private static int ListenToTestQueue(StreamWriter log, CommandLineArgs commandLineArgs)
         {
-            var factory = new TaskFactory();
             bool allTestsPassed = true;
             int CLIENT_WAIT_TIMEOUT = 10; // time to wait for a message from server before exiting, in seconds
 
@@ -458,19 +456,20 @@ namespace TestRunner
             using (var sender = new PushSocket($">tcp://{host}:5557"))
             using (var receiver = new PullSocket("@tcp://*:5558"))
             using (var sender2 = new PushSocket("@tcp://*:5559"))
+            using (var cts = new CancellationTokenSource())
             {
+                var factory = new TaskFactory(cts.Token);
 
                 string ip = Dns.GetHostEntry(Dns.GetHostName()).AddressList
                     .First(a => a.AddressFamily != System.Net.Sockets.AddressFamily.InterNetworkV6).ToString();
                 Console.WriteLine($"Sending worker name and IP: {workerName}/{ip}");
                 sender.SendFrame(workerName + '/' + ip);
-                bool done = false;
 
                 // start heartbeat thread from server
                 factory.StartNew(() => {
                     using (var heartbeatReceiver = new PushSocket($"@tcp://*:5560"))
                     {
-                        while (!done)
+                        while (!cts.IsCancellationRequested)
                         {
                             for (int attempts=0; attempts < 3; ++attempts)
                             {
@@ -479,7 +478,7 @@ namespace TestRunner
                                     Console.Error.WriteLine("Server heartbeat could not be sent.");
                                     if (attempts == 2)
                                     {
-                                        done = true;
+                                        cts.Cancel();
                                         break;
                                     }
                                     continue;
@@ -498,7 +497,7 @@ namespace TestRunner
                     // first check for a quit message 
                     if (msg == "TestRunnerQuit")
                     {
-                        done = true;
+                        cts.Cancel();
                         return;
                     }
 
@@ -517,7 +516,7 @@ namespace TestRunner
                         if (!sender2.TrySendFrame(TimeSpan.FromSeconds(CLIENT_WAIT_TIMEOUT), resultBuffer.ToArray(), (int) testLogStream.Length+1))
                         {
                             Console.Error.WriteLine($"Exiting due to no response from server in {CLIENT_WAIT_TIMEOUT} seconds.");
-                            done = true;
+                            cts.Cancel();
                         }
                     }
 
@@ -526,7 +525,7 @@ namespace TestRunner
 
                 Thread.Sleep(1000);
 
-                while (!done)
+                while (!cts.IsCancellationRequested)
                 {
                     Console.WriteLine("Waiting for message");
                     if (!sender2.TrySignalOK())
@@ -538,7 +537,7 @@ namespace TestRunner
                     if (!receiver.Poll(TimeSpan.FromSeconds(CLIENT_WAIT_TIMEOUT)))
                     {
                         Console.Error.WriteLine($"Exiting due to no response from server in {CLIENT_WAIT_TIMEOUT} seconds.");
-                        done = true;
+                        cts.Cancel();
                     }
                 }
             }
@@ -582,7 +581,8 @@ namespace TestRunner
 
         private static bool PushToTestQueue(List<TestInfo> testList, CommandLineArgs commandLineArgs, StreamWriter log)
         {
-            var factory = new TaskFactory();
+            var cts = new CancellationTokenSource();
+            var factory = new TaskFactory(cts.Token);
             var testQueue = new ConcurrentQueue<QueuedTestInfo>();
             var nonParallelTestQueue = new ConcurrentQueue<QueuedTestInfo>();
             var workerIsAlive = new ConcurrentDictionary<string, bool>();
@@ -592,7 +592,6 @@ namespace TestRunner
             int testsResultsReturned = 0;
             int workerCount = (int) commandLineArgs.ArgAsLong("workercount");
             bool teamcityTestDecoration = commandLineArgs.ArgAsBool("teamcitytestdecoration");
-            bool done = false;
             bool isCanceling = false;
             var languages = commandLineArgs.ArgAsString("language").Split(',');
 
@@ -600,6 +599,7 @@ namespace TestRunner
             {
                 Console.WriteLine("Ctrl-C pressed: closing server and clients.");
                 args.Cancel = true;
+                cts.Cancel();
                 isCanceling = true;
             };
 
@@ -612,10 +612,10 @@ namespace TestRunner
 
             // handle big tests on the server
             tasks.Add(factory.StartNew(() => {
-                while (!done)
+                while (!cts.IsCancellationRequested)
                 {
                     QueuedTestInfo testInfo = null;
-                    bool abort = isCanceling;
+                    bool abort = cts.IsCancellationRequested;
                     if (!abort)
                     {
                         nonParallelTestQueue.TryDequeue(out testInfo);
@@ -631,7 +631,7 @@ namespace TestRunner
                             Thread.Sleep(1000);
                             continue;
                         }
-                        done = true;
+                        cts.Cancel();
                         return;
                     }
 
@@ -648,13 +648,15 @@ namespace TestRunner
                         //psi.UseShellExecute = true;
                         psi.CreateNoWindow = false;
                         var p = Process.Start(psi);
+                        if (p == null)
+                            throw new InvalidOperationException("failed to start server worker (required for NoParallelTesting tests)");
                         p.PriorityClass = ProcessPriorityClass.BelowNormal;
                         while (!p.WaitForExit(1000))
                         {
                             if (isCanceling)
                             {
                                 p.Kill();
-                                done = true;
+                                cts.Cancel();
                                 return;
                             }
                         }
@@ -717,7 +719,7 @@ namespace TestRunner
             // open socket that listens for workers to connect
             using (var receiver = new PullSocket("@tcp://*:5557"))
             {
-                while (!done)
+                while (!cts.IsCancellationRequested)
                 {
                     // listen for an IP/name pair from a worker
                     if (!receiver.TryReceiveFrameString(TimeSpan.FromSeconds(1), out var workerNameAndIP))
@@ -738,7 +740,7 @@ namespace TestRunner
                         {
                             workerIsAlive[workerName] = true;
 
-                            while (!done)
+                            while (!cts.IsCancellationRequested)
                             {
                                 // listen for "ready" signal from worker
                                 if (!workerReceiver.TryReceiveSignal(TimeSpan.FromSeconds(3), out bool signal) && !isCanceling && workerIsAlive[workerName])
@@ -812,7 +814,7 @@ namespace TestRunner
                         {
                             var msg = new Msg();
                             msg.InitEmpty();
-                            while (!done)
+                            while (!cts.IsCancellationRequested)
                             {
                                 if (!workerHeartbeat.TryReceive(ref msg, TimeSpan.FromSeconds(5)))
                                 {
@@ -822,7 +824,7 @@ namespace TestRunner
                                         return;
                                     Console.WriteLine($"Worker {workerName} stopped responding.");
 
-                                    if (workerCount > 0 && !isCanceling && !done && !workerIsAlive.Any(kvp => kvp.Value))
+                                    if (workerCount > 0 && !isCanceling && !cts.IsCancellationRequested && !workerIsAlive.Any(kvp => kvp.Value))
                                     {
                                         Console.WriteLine("No more workers alive: starting another worker.");
                                         LaunchDockerWorker(workerIsAlive.Count + 1, commandLineArgs, ref workerNames, true);

@@ -4474,7 +4474,7 @@ namespace pwiz.Skyline.Model
                     stdinBuilder.Append(pair.Value);
                 }
 
-                string dirWork = Path.GetDirectoryName(fileName);
+                string dirWork = Path.GetDirectoryName(fileName) ?? Environment.CurrentDirectory;
                 using (var tmpDir = new TemporaryDirectory(Path.Combine(dirWork, Path.GetRandomFileName())))
                 {
                     var transitionsFile = Path.Combine(tmpDir.DirPath, @"transitions.txt");
@@ -4489,7 +4489,7 @@ namespace pwiz.Skyline.Model
                         CreateNoWindow = true,
                         UseShellExecute = false,
                         // Common directory includes the directory separator
-                        WorkingDirectory = dirWork ?? string.Empty,
+                        WorkingDirectory = dirWork,
                         Arguments = string.Join(@" ", argv.ToArray()),
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
