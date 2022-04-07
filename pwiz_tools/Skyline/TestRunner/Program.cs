@@ -639,7 +639,7 @@ namespace TestRunner
                     try
                     {
                         // running RunTestPasses() for GUI tests directly is problematic because we're no longer on the main thread
-                        var testRunnerCmd = $@"test={testName} offscreen=1 showheader=0 log=serverWorker.log loop=1 language={testInfo.Language}";
+                        var testRunnerCmd = $@"test={testName} offscreen=1 showheader=0 log=serverWorker.log parallelmode=server_worker loop=1 language={testInfo.Language}";
                         foreach (string a in new[] { "perftests", "teamcitytestdecoration" })
                             testRunnerCmd += $" {a}={commandLineArgs.ArgAsString(a)}";
 
@@ -927,8 +927,9 @@ namespace TestRunner
             var dmpDir = commandLineArgs.ArgAsString("dmpdir");
             bool teamcityTestDecoration = commandLineArgs.ArgAsBool("teamcitytestdecoration");
             bool verbose = commandLineArgs.ArgAsBool("verbose");
-            bool serverMode = commandLineArgs.ArgAsString("parallelmode") == "server";
-            bool clientMode = commandLineArgs.ArgAsString("parallelmode") == "client";
+            string parallelMode = commandLineArgs.ArgAsString("parallelmode");
+            bool serverMode = parallelMode == "server";
+            bool clientMode = parallelMode == "client" || parallelMode == "server_worker";
             bool asNightly = offscreen && qualityMode;  // While it is possible to run quality off screen from the Quality tab, this is what we use to distinguish for treatment of perf tests
 
             // If we haven't been told to run perf tests, remove any from the list
