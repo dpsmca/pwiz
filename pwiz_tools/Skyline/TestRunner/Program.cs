@@ -610,6 +610,42 @@ namespace TestRunner
                     queue.Enqueue(new QueuedTestInfo(testInfo, language));
             }
 
+            string workerNames = null;
+            if (workerCount > 0)
+            {
+                long availableBytesForNormalWorkers = MemoryInfo.AvailableBytes - MinBytesPerBigWorker;
+
+                int normalWorkerCount = workerCount - 1;
+                long normalWorkerBytes = MinBytesPerNormalWorker * normalWorkerCount;
+                long totalWorkerBytes = normalWorkerBytes + MinBytesPerBigWorker;
+                if (availableBytesForNormalWorkers < normalWorkerBytes)
+                    throw new ArgumentException($"not enough free memory ({MemoryInfo.AvailableBytes / MemoryInfo.Mibibyte} MB) for {workerCount} workers: need at least {totalWorkerBytes / MemoryInfo.Mibibyte} MB");
+
+                factory.StartNew(() =>
+                {
+                    for (int i = 0; i < normalWorkerCount; ++i)
+                    {
+                        string workerName = LaunchDockerWorker(i, commandLineArgs, ref workerNames, false);
+
+                        bool waitForWorkerConnect = teamcityTestDecoration;
+                        if (waitForWorkerConnect)
+                        {
+                            for (int attempt = 0; attempt < 10; ++attempt)
+                            {
+                                if (workerIsAlive.ContainsKey(workerName))
+                                    break;
+                                if (attempt == 9)
+                                    Console.Error.WriteLine($"Worker {workerName} did not connect.");
+                                Thread.Sleep(3000);
+                            }
+                        }
+                        else
+                            Thread.Sleep(1000);
+                    }
+                    //LaunchDockerWorker(normalWorkerCount, commandLineArgs, ref workerNames, true);
+                });
+            }
+
             // handle big tests on the server
             tasks.Add(factory.StartNew(() => {
                 while (!cts.IsCancellationRequested)
@@ -679,42 +715,6 @@ namespace TestRunner
                     }
                 }
             }, TaskCreationOptions.LongRunning));
-
-            string workerNames = null;
-            if (workerCount > 0)
-            {
-                long availableBytesForNormalWorkers = MemoryInfo.AvailableBytes - MinBytesPerBigWorker;
-
-                int normalWorkerCount = workerCount - 1;
-                long normalWorkerBytes = MinBytesPerNormalWorker * normalWorkerCount;
-                long totalWorkerBytes = normalWorkerBytes + MinBytesPerBigWorker;
-                if (availableBytesForNormalWorkers < normalWorkerBytes)
-                    throw new ArgumentException($"not enough free memory ({MemoryInfo.AvailableBytes / MemoryInfo.Mibibyte} MB) for {workerCount} workers: need at least {totalWorkerBytes / MemoryInfo.Mibibyte} MB");
-
-                factory.StartNew(() =>
-                {
-                    for (int i = 0; i < normalWorkerCount; ++i)
-                    {
-                        string workerName = LaunchDockerWorker(i, commandLineArgs, ref workerNames, false);
-
-                        bool waitForWorkerConnect = teamcityTestDecoration;
-                        if (waitForWorkerConnect)
-                        {
-                            for (int attempt = 0; attempt < 10; ++attempt)
-                            {
-                                if (workerIsAlive.ContainsKey(workerName))
-                                    break;
-                                if (attempt == 9)
-                                    Console.Error.WriteLine($"Worker {workerName} did not connect.");
-                                Thread.Sleep(3000);
-                            }
-                        }
-                        else
-                            Thread.Sleep(1000);
-                    }
-                    //LaunchDockerWorker(normalWorkerCount, commandLineArgs, ref workerNames, true);
-                });
-            }
 
             // open socket that listens for workers to connect
             using (var receiver = new PullSocket("@tcp://*:5557"))
