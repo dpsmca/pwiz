@@ -591,6 +591,7 @@ namespace TestRunner
             int testsFailed = 0;
             int testsResultsReturned = 0;
             int workerCount = (int) commandLineArgs.ArgAsLong("workercount");
+            bool teamcityTestDecoration = commandLineArgs.ArgAsBool("teamcitytestdecoration");
             bool done = false;
             bool isCanceling = false;
             var languages = commandLineArgs.ArgAsString("language").Split(',');
@@ -694,7 +695,7 @@ namespace TestRunner
                     {
                         string workerName = LaunchDockerWorker(i, commandLineArgs, ref workerNames, false);
 
-                        bool waitForWorkerConnect = false;
+                        bool waitForWorkerConnect = teamcityTestDecoration;
                         if (waitForWorkerConnect)
                         {
                             for (int attempt = 0; attempt < 10; ++attempt)
