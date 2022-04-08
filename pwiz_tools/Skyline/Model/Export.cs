@@ -4506,7 +4506,7 @@ namespace pwiz.Skyline.Model
                     }
                     progressMonitor?.UpdateProgress(status);
 
-                    psiExporter.RunProcess(stdinBuilder.ToString(), @"MESSAGE: ", progressMonitor, ref status);
+                    psiExporter.RunProcess(null, @"MESSAGE: ", progressMonitor, ref status);
 
                     if (!status.IsError && !status.IsCanceled)
                     {
