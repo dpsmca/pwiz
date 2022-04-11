@@ -553,7 +553,7 @@ namespace TestRunner
             var pwizRoot = Path.GetDirectoryName(Path.GetDirectoryName(GetSkylineDirectory().FullName));
 
             var testRunnerCmd = $@"c:\pwiz\pwiz_tools\Skyline\bin\x64\Release\TestRunner.exe parallelmode=client showheader=0 results=c:\AlwaysUpCLT\TestResults log=c:\AlwaysUpCLT\TestRunner.log";
-            foreach (string p in new[] { "perftests", "teamcitytestdecoration" })
+            foreach (string p in new[] { "perftests", "teamcitytestdecoration", "buildcheck" })
                 testRunnerCmd += $" {p}={commandLineArgs.ArgAsString(p)}";
 
             long workerBytes = bigWorker ? MinBytesPerBigWorker : MinBytesPerNormalWorker;
@@ -676,7 +676,7 @@ namespace TestRunner
                     {
                         // running RunTestPasses() for GUI tests directly is problematic because we're no longer on the main thread
                         var testRunnerCmd = $@"test={testName} offscreen=1 showheader=0 log=serverWorker.log parallelmode=server_worker loop=1 language={testInfo.Language}";
-                        foreach (string a in new[] { "perftests", "teamcitytestdecoration" })
+                        foreach (string a in new[] { "perftests", "teamcitytestdecoration", "buildcheck" })
                             testRunnerCmd += $" {a}={commandLineArgs.ArgAsString(a)}";
 
                         var psi = new ProcessStartInfo(Assembly.GetExecutingAssembly().Location, testRunnerCmd);
