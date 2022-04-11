@@ -593,7 +593,9 @@ namespace TestRunner
             int workerCount = (int) commandLineArgs.ArgAsLong("workercount");
             bool teamcityTestDecoration = commandLineArgs.ArgAsBool("teamcitytestdecoration");
             bool isCanceling = false;
-            var languages = commandLineArgs.ArgAsString("language").Split(',');
+            var languages = commandLineArgs.ArgAsBool("buildcheck")
+                ? new[] { "en" }
+                : commandLineArgs.ArgAsString("language").Split(',');
 
             Console.CancelKeyPress += (sender, args) =>
             {
@@ -601,6 +603,13 @@ namespace TestRunner
                 args.Cancel = true;
                 cts.Cancel();
                 isCanceling = true;
+            };
+
+            Func<string, string> TweakTestOutput = testOutput =>
+            {
+                testOutput = testOutput.Trim(' ', '\t', '\r', '\n');
+                testOutput = Regex.Replace(testOutput, @"\d+ failures", $"{testsFailed} failures");
+                return Regex.Replace(testOutput, @"^\s*(\d+)\.(\d+)?", $" $1.{testsResultsReturned} ", RegexOptions.Multiline);
             };
 
             foreach (var testInfo in testList)
@@ -701,9 +710,7 @@ namespace TestRunner
                         if (!testPassed)
                             Interlocked.Increment(ref testsFailed);
                         var testOutput = File.ReadAllText("serverWorker.log");
-                        testOutput = testOutput.Trim(' ', '\t', '\r', '\n');
-                        testOutput = Regex.Replace(testOutput, @"\d+ failures", $"{testsFailed} failures");
-                        testOutput = Regex.Replace(testOutput, @" 1.0 ", $" 1.{testsResultsReturned} ");
+                        testOutput = TweakTestOutput(testOutput);
                         Interlocked.Increment(ref testsResultsReturned);
 
                         Console.WriteLine(testOutput);
@@ -784,9 +791,7 @@ namespace TestRunner
                                     if (!testPassed)
                                         Interlocked.Increment(ref testsFailed);
                                     string testOutput = Encoding.UTF8.GetString(result, 1, result.Length - 1);
-                                    testOutput = testOutput.Trim(' ', '\t', '\r', '\n');
-                                    testOutput = Regex.Replace(testOutput, @"\d+ failures", $"{testsFailed} failures");
-                                    testOutput = Regex.Replace(testOutput, @" 1.0 ", $" 1.{testsResultsReturned} ");
+                                    testOutput = TweakTestOutput(testOutput);
                                     Interlocked.Increment(ref testsResultsReturned);
                                     if (!testOutput.IsNullOrEmpty())
                                     {
