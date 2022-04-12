@@ -223,7 +223,7 @@ namespace TestRunner
             "?;/?;-?;help;skylinetester;debug;results;" +
             "test;skip;filter;form;" +
             "loop=0;repeat=1;pause=0;startingpage=1;random=off;offscreen=on;multi=1;wait=off;internet=off;originalurls=off;" +
-            "parallelmode=off;workercount=0;workername;queuehost;" +
+            "parallelmode=off;workercount=0;workername;queuehost;workerport;" +
             "maxsecondspertest=-1;" +
             "demo=off;showformnames=off;showpages=off;status=off;buildcheck=0;screenshotlist;" +
             "quality=off;pass0=off;pass1=off;pass2=on;" +
@@ -452,26 +452,26 @@ namespace TestRunner
                 host = GetDefaultGateway()?.ToString() ?? "localhost";
 
             string workerName = commandLineArgs.ArgAsString("workername") ?? throw new InvalidOperationException("parallelmode=client processes must have workername parameter set");
+            int workerPort = Convert.ToInt32(commandLineArgs.ArgAsString("workerport") ?? throw new InvalidOperationException("parallelmode=client processes must have workerport parameter set"));
 
-            using (var sender = new PushSocket($">tcp://{host}:5557"))
-            using (var receiver = new PullSocket("@tcp://*:5558"))
-            using (var sender2 = new PushSocket("@tcp://*:5559"))
+            using (var sender = new PushSocket($">tcp://{host}:{workerPort}"))
+            using (var receiver = new PullSocket())
+            using (var sender2 = new PushSocket())
             using (var cts = new CancellationTokenSource())
             {
                 var factory = new TaskFactory(cts.Token);
 
-                string ip = Dns.GetHostEntry(Dns.GetHostName()).AddressList
-                    .First(a => a.AddressFamily != System.Net.Sockets.AddressFamily.InterNetworkV6).ToString();
-                Console.WriteLine($"Sending worker name and IP: {workerName}/{ip}");
-                sender.SendFrame(workerName + '/' + ip);
+                int heartbeatPort = 0;
 
                 // start heartbeat thread from server
                 factory.StartNew(() => {
-                    using (var heartbeatReceiver = new PushSocket($"@tcp://*:5560"))
+                    using (var heartbeatReceiver = new PushSocket())
                     {
+                        Interlocked.Add(ref heartbeatPort, heartbeatReceiver.BindRandomPort("tcp://*"));
+
                         while (!cts.IsCancellationRequested)
                         {
-                            for (int attempts=0; attempts < 3; ++attempts)
+                            for (int attempts = 0; attempts < 3; ++attempts)
                             {
                                 if (!heartbeatReceiver.TrySendFrameEmpty(TimeSpan.FromSeconds(15)))
                                 {
@@ -489,6 +489,19 @@ namespace TestRunner
                         }
                     }
                 }, TaskCreationOptions.LongRunning);
+
+                while(heartbeatPort == 0)
+                    Thread.Sleep(500);
+
+                int tasksPort = receiver.BindRandomPort("tcp://*"); // port for receiving tasks from server
+                int resultsPort = sender2.BindRandomPort("tcp://*"); // port for sending results to server
+
+                string ip = Dns.GetHostEntry(Dns.GetHostName()).AddressList
+                    .First(a => a.AddressFamily != System.Net.Sockets.AddressFamily.InterNetworkV6).ToString();
+                string workerId = $"{workerName}/{ip}/{tasksPort}/{resultsPort}/{heartbeatPort}";
+                Console.WriteLine($"Sending worker name and IP: {workerId}");
+                sender.SendFrame(workerId);
+
 
                 receiver.ReceiveReady += (s, args) =>
                 {
@@ -548,13 +561,14 @@ namespace TestRunner
         private static long MinBytesPerBigWorker => MemoryInfo.Gibibyte * 6;
         //static bool testRequeue = true;
 
-        private static string LaunchDockerWorker(int i, CommandLineArgs commandLineArgs, ref string workerNames, bool bigWorker)
+        private static string LaunchDockerWorker(int i, CommandLineArgs commandLineArgs, ref string workerNames, bool bigWorker, int workerPort)
         {
             var pwizRoot = Path.GetDirectoryName(Path.GetDirectoryName(GetSkylineDirectory().FullName));
 
             var testRunnerCmd = $@"c:\pwiz\pwiz_tools\Skyline\bin\x64\Release\TestRunner.exe parallelmode=client showheader=0 results=c:\AlwaysUpCLT\TestResults log=c:\AlwaysUpCLT\TestRunner.log";
             foreach (string p in new[] { "perftests", "teamcitytestdecoration", "buildcheck" })
                 testRunnerCmd += $" {p}={commandLineArgs.ArgAsString(p)}";
+            testRunnerCmd += $" workerport={workerPort}";
 
             long workerBytes = bigWorker ? MinBytesPerBigWorker : MinBytesPerNormalWorker;
             string workerName = bigWorker ? $"docker_big_worker_{i}" : $"docker_worker_{i}";
@@ -609,7 +623,7 @@ namespace TestRunner
             {
                 testOutput = testOutput.Trim(' ', '\t', '\r', '\n');
                 testOutput = Regex.Replace(testOutput, @"\d+ failures", $"{testsFailed} failures");
-                return Regex.Replace(testOutput, @"^\s*(\d+)\.(\d+)?", $" $1.{testsResultsReturned} ", RegexOptions.Multiline);
+                return Regex.Replace(testOutput, @"^(\[\d+:\d+\])?\s*(\d+)\.(\d+)?", $" $1 $2.{testsResultsReturned} ", RegexOptions.Multiline);
             };
 
             foreach (var testInfo in testList)
@@ -619,131 +633,151 @@ namespace TestRunner
                     queue.Enqueue(new QueuedTestInfo(testInfo, language));
             }
 
-            string workerNames = null;
-            if (workerCount > 0)
+            // open socket that listens for workers to connect
+            using (var receiver = new PullSocket())
             {
-                long availableBytesForNormalWorkers = MemoryInfo.AvailableBytes - MinBytesPerBigWorker;
+                // get system-assigned port which will passed to workers with "workerport" parameter
+                int workerPort = receiver.BindRandomPort("tcp://*");
 
-                int normalWorkerCount = workerCount - 1;
-                long normalWorkerBytes = MinBytesPerNormalWorker * normalWorkerCount;
-                long totalWorkerBytes = normalWorkerBytes + MinBytesPerBigWorker;
-                if (availableBytesForNormalWorkers < normalWorkerBytes)
-                    throw new ArgumentException($"not enough free memory ({MemoryInfo.AvailableBytes / MemoryInfo.Mibibyte} MB) for {workerCount} workers: need at least {totalWorkerBytes / MemoryInfo.Mibibyte} MB");
-
-                factory.StartNew(() =>
+                string workerNames = null;
+                if (workerCount > 0)
                 {
-                    for (int i = 0; i < normalWorkerCount; ++i)
-                    {
-                        string workerName = LaunchDockerWorker(i, commandLineArgs, ref workerNames, false);
+                    long availableBytesForNormalWorkers = MemoryInfo.AvailableBytes - MinBytesPerBigWorker;
 
+                    int normalWorkerCount = workerCount - 1;
+                    long normalWorkerBytes = MinBytesPerNormalWorker * normalWorkerCount;
+                    long totalWorkerBytes = normalWorkerBytes + MinBytesPerBigWorker;
+                    if (availableBytesForNormalWorkers < normalWorkerBytes)
+                        throw new ArgumentException($"not enough free memory ({MemoryInfo.AvailableBytes / MemoryInfo.Mibibyte} MB) for {workerCount} workers: need at least {totalWorkerBytes / MemoryInfo.Mibibyte} MB");
+
+                    factory.StartNew(() =>
+                    {
                         bool waitForWorkerConnect = teamcityTestDecoration;
                         if (waitForWorkerConnect)
                         {
-                            for (int attempt = 0; attempt < 10; ++attempt)
+                            for (int i = 0; i < normalWorkerCount; ++i)
                             {
-                                if (workerIsAlive.ContainsKey(workerName))
-                                    break;
-                                if (attempt == 9)
-                                    Console.Error.WriteLine($"Worker {workerName} did not connect.");
-                                Thread.Sleep(3000);
+                                string currentWorkerNames = workerNames;
+                                Helpers.Try<Exception>(() =>
+                                {
+                                    string workerName = LaunchDockerWorker(i, commandLineArgs, ref currentWorkerNames, false, workerPort);
+                                    for (int attempt = 0; attempt < 10; ++attempt)
+                                    {
+                                        Thread.Sleep(3000);
+                                        if (workerIsAlive.ContainsKey(workerName))
+                                        {
+                                            workerNames = currentWorkerNames;
+                                            return;
+                                        }
+                                    }
+                                    throw new Exception($"Worker {workerName} did not connect.");
+                                }, 4, 3000);
                             }
                         }
                         else
-                            Thread.Sleep(1000);
-                    }
-                    //LaunchDockerWorker(normalWorkerCount, commandLineArgs, ref workerNames, true);
-                });
-            }
-
-            // handle big tests on the server
-            tasks.Add(factory.StartNew(() => {
-                while (!cts.IsCancellationRequested)
-                {
-                    QueuedTestInfo testInfo = null;
-                    bool abort = cts.IsCancellationRequested;
-                    if (!abort)
-                    {
-                        nonParallelTestQueue.TryDequeue(out testInfo);
-                        if (testInfo == null)
-                            testQueue.TryDequeue(out testInfo);
-                    }
-
-                    if (abort || testInfo == null)
-                    {
-                        // server test thread will not return until all workers have finished in order to handle requeued tests
-                        if (workerIsAlive.Any(kvp => kvp.Value))
                         {
-                            Thread.Sleep(1000);
-                            continue;
-                        }
-                        cts.Cancel();
-                        return;
-                    }
-
-                    string testName = testInfo.TestInfo.TestMethod.Name;
-                    try
-                    {
-                        // running RunTestPasses() for GUI tests directly is problematic because we're no longer on the main thread
-                        var testRunnerCmd = $@"test={testName} offscreen=1 showheader=0 log=serverWorker.log parallelmode=server_worker loop=1 language={testInfo.Language}";
-                        foreach (string a in new[] { "perftests", "teamcitytestdecoration", "buildcheck" })
-                            testRunnerCmd += $" {a}={commandLineArgs.ArgAsString(a)}";
-
-                        var psi = new ProcessStartInfo(Assembly.GetExecutingAssembly().Location, testRunnerCmd);
-                        psi.WindowStyle = ProcessWindowStyle.Minimized;
-                        //psi.UseShellExecute = true;
-                        psi.CreateNoWindow = false;
-                        var p = Process.Start(psi);
-                        if (p == null)
-                            throw new InvalidOperationException("failed to start server worker (required for NoParallelTesting tests)");
-                        p.PriorityClass = ProcessPriorityClass.BelowNormal;
-                        while (!p.WaitForExit(1000))
-                        {
-                            if (isCanceling)
+                            for (int i = 0; i < normalWorkerCount; ++i)
                             {
-                                p.Kill();
-                                cts.Cancel();
-                                return;
+                                LaunchDockerWorker(i, commandLineArgs, ref workerNames, false, workerPort);
+                                Thread.Sleep(1000);
                             }
                         }
-
-                        bool testPassed = p.ExitCode == 0;
-                        if (!testPassed)
-                            Interlocked.Increment(ref testsFailed);
-                        var testOutput = File.ReadAllText("serverWorker.log");
-                        testOutput = TweakTestOutput(testOutput);
-                        Interlocked.Increment(ref testsResultsReturned);
-
-                        Console.WriteLine(testOutput);
-                        log.Write(testOutput);
-                    }
-                    catch (Exception e)
-                    {
-                        Console.Error.WriteLine(e.ToString());
-                    }
+                        //LaunchDockerWorker(normalWorkerCount, commandLineArgs, ref workerNames, true);
+                    });
                 }
-            }, TaskCreationOptions.LongRunning));
 
-            // open socket that listens for workers to connect
-            using (var receiver = new PullSocket("@tcp://*:5557"))
-            {
+                // handle big tests on the server
+                tasks.Add(factory.StartNew(() => {
+                    while (!cts.IsCancellationRequested)
+                    {
+                        QueuedTestInfo testInfo = null;
+                        bool abort = cts.IsCancellationRequested;
+                        if (!abort)
+                        {
+                            nonParallelTestQueue.TryDequeue(out testInfo);
+                            if (testInfo == null)
+                                testQueue.TryDequeue(out testInfo);
+                        }
+
+                        if (abort || testInfo == null)
+                        {
+                            // server test thread will not return until all workers have finished in order to handle requeued tests
+                            if (workerIsAlive.Any(kvp => kvp.Value))
+                            {
+                                Thread.Sleep(1000);
+                                continue;
+                            }
+                            cts.Cancel();
+                            return;
+                        }
+
+                        string testName = testInfo.TestInfo.TestMethod.Name;
+                        try
+                        {
+                            // running RunTestPasses() for GUI tests directly is problematic because we're no longer on the main thread
+                            var testRunnerCmd = $@"test={testName} offscreen=1 showheader=0 log=serverWorker.log parallelmode=server_worker loop=1 language={testInfo.Language}";
+                            foreach (string a in new[] { "perftests", "teamcitytestdecoration", "buildcheck" })
+                                testRunnerCmd += $" {a}={commandLineArgs.ArgAsString(a)}";
+
+                            var psi = new ProcessStartInfo(Assembly.GetExecutingAssembly().Location, testRunnerCmd);
+                            psi.WindowStyle = ProcessWindowStyle.Minimized;
+                            //psi.UseShellExecute = true;
+                            psi.CreateNoWindow = false;
+                            var p = Process.Start(psi);
+                            if (p == null)
+                                throw new InvalidOperationException("failed to start server worker (required for NoParallelTesting tests)");
+                            p.PriorityClass = ProcessPriorityClass.BelowNormal;
+                            while (!p.WaitForExit(1000))
+                            {
+                                if (isCanceling)
+                                {
+                                    p.Kill();
+                                    cts.Cancel();
+                                    return;
+                                }
+                            }
+
+                            bool testPassed = p.ExitCode == 0;
+                            if (!testPassed)
+                                Interlocked.Increment(ref testsFailed);
+                            var testOutput = File.ReadAllText("serverWorker.log");
+                            testOutput = TweakTestOutput(testOutput);
+                            Interlocked.Increment(ref testsResultsReturned);
+
+                            Console.WriteLine(testOutput);
+                            log.Write(testOutput);
+                        }
+                        catch (Exception e)
+                        {
+                            Console.Error.WriteLine(e.ToString());
+                        }
+                    }
+                }, TaskCreationOptions.LongRunning));
+
+
+                // main thread listens for workers to connect
                 while (!cts.IsCancellationRequested)
                 {
-                    // listen for an IP/name pair from a worker
-                    if (!receiver.TryReceiveFrameString(TimeSpan.FromSeconds(1), out var workerNameAndIP))
+                    // listen for workerName/IP/tasksPort/resultsPort/heartbeatPort string from a worker
+                    if (!receiver.TryReceiveFrameString(TimeSpan.FromSeconds(1), out var workerId))
                     {
                         if (isCanceling)
                             break;
                         continue;
                     }
 
-                    string workerName = workerNameAndIP.Split('/')[0];
-                    string workerIP = workerNameAndIP.Split('/')[1];
+                    string[] workerIdParts = workerId.Split('/');
+                    string workerName = workerIdParts[0];
+                    string workerIP = workerIdParts[1];
+                    string tasksPort = workerIdParts[2];
+                    string resultsPort = workerIdParts[3];
+                    string heartbeatPort = workerIdParts[4];
                     bool isBigWorker = workerName.Contains("big_worker");
 
-                    Console.WriteLine($"Connection from worker {workerNameAndIP}");
+                    Console.WriteLine($"Connection from worker {workerId}");
                     tasks.Add(factory.StartNew(() => {
-                        using (var workerSender = new PushSocket($">tcp://{workerIP}:5558"))
-                        using (var workerReceiver = new PullSocket($">tcp://{workerIP}:5559"))
+                        using (var workerSender = new PushSocket($">tcp://{workerIP}:{tasksPort}"))
+                        using (var workerReceiver = new PullSocket($">tcp://{workerIP}:{resultsPort}"))
                         {
                             workerIsAlive[workerName] = true;
 
@@ -815,7 +849,7 @@ namespace TestRunner
 
                     // start heartbeat for worker
                     factory.StartNew(() => {
-                        using (var workerHeartbeat = new PullSocket($">tcp://{workerIP}:5560"))
+                        using (var workerHeartbeat = new PullSocket($">tcp://{workerIP}:{heartbeatPort}"))
                         {
                             var msg = new Msg();
                             msg.InitEmpty();
@@ -832,7 +866,7 @@ namespace TestRunner
                                     if (workerCount > 0 && !isCanceling && !cts.IsCancellationRequested && !workerIsAlive.Any(kvp => kvp.Value))
                                     {
                                         Console.WriteLine("No more workers alive: starting another worker.");
-                                        LaunchDockerWorker(workerIsAlive.Count + 1, commandLineArgs, ref workerNames, true);
+                                        LaunchDockerWorker(workerIsAlive.Count + 1, commandLineArgs, ref workerNames, true, workerPort);
                                     }
                                     return;
                                 }
