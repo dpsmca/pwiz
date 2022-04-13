@@ -582,6 +582,22 @@ namespace TestRunner
             return workerName;
         }
 
+        private static void LaunchAndWaitForDockerWorker(int i, CommandLineArgs commandLineArgs, ref string workerNames, bool bigWorker, int workerPort, ConcurrentDictionary<string, bool> workerIsAlive)
+        {
+            string currentWorkerNames = workerNames;
+            string workerName = LaunchDockerWorker(i, commandLineArgs, ref currentWorkerNames, false, workerPort);
+            for (int attempt = 0; attempt< 10; ++attempt)
+            {
+                Thread.Sleep(3000);
+                if (workerIsAlive.ContainsKey(workerName))
+                {
+                    workerNames = currentWorkerNames;
+                    return;
+                }
+            }
+            throw new Exception($"Worker {workerName} did not connect.");
+        }
+
         private class QueuedTestInfo
         {
             public QueuedTestInfo(TestInfo testInfo, string language)
@@ -657,21 +673,8 @@ namespace TestRunner
                         {
                             for (int i = 0; i < normalWorkerCount; ++i)
                             {
-                                Helpers.Try<Exception>(() =>
-                                {
-                                    string currentWorkerNames = workerNames;
-                                    string workerName = LaunchDockerWorker(i, commandLineArgs, ref currentWorkerNames, false, workerPort);
-                                    for (int attempt = 0; attempt < 10; ++attempt)
-                                    {
-                                        Thread.Sleep(3000);
-                                        if (workerIsAlive.ContainsKey(workerName))
-                                        {
-                                            workerNames = currentWorkerNames;
-                                            return;
-                                        }
-                                    }
-                                    throw new Exception($"Worker {workerName} did not connect.");
-                                }, 4, 3000);
+                                int i2 = i;
+                                Helpers.Try<Exception>(() => LaunchAndWaitForDockerWorker(i2, commandLineArgs, ref workerNames, false, workerPort, workerIsAlive), 4, 3000);
                             }
                         }
                         else
