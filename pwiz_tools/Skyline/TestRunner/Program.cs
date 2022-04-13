@@ -648,7 +648,7 @@ namespace TestRunner
                     long normalWorkerBytes = MinBytesPerNormalWorker * normalWorkerCount;
                     long totalWorkerBytes = normalWorkerBytes + MinBytesPerBigWorker;
                     if (availableBytesForNormalWorkers < normalWorkerBytes)
-                        throw new ArgumentException($"not enough free memory ({MemoryInfo.AvailableBytes / MemoryInfo.Mibibyte} MB) for {workerCount} workers: need at least {totalWorkerBytes / MemoryInfo.Mibibyte} MB");
+                        throw new ArgumentException($"not enough free memory ({MemoryInfo.AvailableBytes / MemoryInfo.Mebibyte} MB) for {workerCount} workers: need at least {totalWorkerBytes / MemoryInfo.Mebibyte} MB");
 
                     factory.StartNew(() =>
                     {
