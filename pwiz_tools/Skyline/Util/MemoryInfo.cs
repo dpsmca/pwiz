@@ -75,7 +75,7 @@ namespace pwiz.Skyline.Util
         }
 
         public readonly static long Kibibyte = 1024;
-        public readonly static long Mibibyte = Kibibyte * 1024;
-        public readonly static long Gibibyte = Mibibyte * 1024;
+        public readonly static long Mebibyte = Kibibyte * 1024;
+        public readonly static long Gibibyte = Mebibyte * 1024;
     }
 }

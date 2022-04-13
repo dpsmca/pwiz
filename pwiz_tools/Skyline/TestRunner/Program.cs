@@ -657,9 +657,9 @@ namespace TestRunner
                         {
                             for (int i = 0; i < normalWorkerCount; ++i)
                             {
-                                string currentWorkerNames = workerNames;
                                 Helpers.Try<Exception>(() =>
                                 {
+                                    string currentWorkerNames = workerNames;
                                     string workerName = LaunchDockerWorker(i, commandLineArgs, ref currentWorkerNames, false, workerPort);
                                     for (int attempt = 0; attempt < 10; ++attempt)
                                     {
