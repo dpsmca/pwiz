@@ -275,7 +275,7 @@ if [ modules.peek : NT ] && --i-agree-to-the-vendor-licenses in [ modules.peek :
             set status=%ERRORLEVEL%
         ) ELSE (
             echo Functional testing Skyline in $(CONFIGURATION:L) configuration with $(WORKERS) Docker workers...
-            $(OUTPUT_PATH)TestRunner.exe log=TestFunctional.log parallelmode=server workercount=$(WORKERS) buildcheck=1 test=TestFunctional.dll,TestConnected.dll $(.teamcity-test-decoration)
+            $(OUTPUT_PATH)TestRunner.exe log=TestFunctional.log parallelmode=server workercount=$(WORKERS) waitforworkers=1 buildcheck=1 test=TestFunctional.dll,TestConnected.dll $(.teamcity-test-decoration)
         )
         exit %status%
     }

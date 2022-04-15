@@ -223,7 +223,7 @@ namespace TestRunner
             "?;/?;-?;help;skylinetester;debug;results;" +
             "test;skip;filter;form;" +
             "loop=0;repeat=1;pause=0;startingpage=1;random=off;offscreen=on;multi=1;wait=off;internet=off;originalurls=off;" +
-            "parallelmode=off;workercount=0;workername;queuehost;workerport;" +
+            "parallelmode=off;workercount=0;waitforworkers=off;workername;queuehost;workerport;" +
             "maxsecondspertest=-1;" +
             "demo=off;showformnames=off;showpages=off;status=off;buildcheck=0;screenshotlist;" +
             "quality=off;pass0=off;pass1=off;pass2=on;" +
@@ -585,7 +585,7 @@ namespace TestRunner
         private static void LaunchAndWaitForDockerWorker(int i, CommandLineArgs commandLineArgs, ref string workerNames, bool bigWorker, int workerPort, ConcurrentDictionary<string, bool> workerIsAlive)
         {
             string currentWorkerNames = workerNames;
-            string workerName = LaunchDockerWorker(i, commandLineArgs, ref currentWorkerNames, false, workerPort);
+            string workerName = LaunchDockerWorker(i, commandLineArgs, ref currentWorkerNames, bigWorker, workerPort);
             for (int attempt = 0; attempt< 10; ++attempt)
             {
                 Thread.Sleep(3000);
@@ -622,6 +622,7 @@ namespace TestRunner
             int testsResultsReturned = 0;
             int workerCount = (int) commandLineArgs.ArgAsLong("workercount");
             bool teamcityTestDecoration = commandLineArgs.ArgAsBool("teamcitytestdecoration");
+            int loop = (int) commandLineArgs.ArgAsLong("loop");
             bool isCanceling = false;
             var languages = commandLineArgs.ArgAsBool("buildcheck")
                 ? new[] { "en" }
@@ -635,19 +636,24 @@ namespace TestRunner
                 isCanceling = true;
             };
 
-            Func<string, string> TweakTestOutput = testOutput =>
+            Action<string, StreamWriter> LogTestOutput = (testOutput, testLog) =>
             {
                 testOutput = testOutput.Trim(' ', '\t', '\r', '\n');
                 testOutput = Regex.Replace(testOutput, @"\d+ failures", $"{testsFailed} failures");
-                return Regex.Replace(testOutput, @"^(\[\d+:\d+\])?\s*(\d+)\.(\d+)?", $" $1 $2.{testsResultsReturned} ", RegexOptions.Multiline);
+                testOutput = Regex.Replace(testOutput, @"^(\[\d+:\d+\])?\s*(\d+)\.(\d+)?", $" $1 $2.{testsResultsReturned} ", RegexOptions.Multiline);
+
+                Console.WriteLine(testOutput);
+                testLog.WriteLine(testOutput);
             };
 
-            foreach (var testInfo in testList)
-            {
-                var queue = testInfo.DoNotRunInParallel ? nonParallelTestQueue : testQueue;
-                foreach (var language in languages)
-                    queue.Enqueue(new QueuedTestInfo(testInfo, language));
-            }
+            // add tests to the queue (at least once, multiple times if loop > 1)
+            for(int i=0; i < Math.Max(1, loop); ++i)
+                foreach (var testInfo in testList)
+                {
+                    var queue = testInfo.DoNotRunInParallel ? nonParallelTestQueue : testQueue;
+                    foreach (var language in languages)
+                        queue.Enqueue(new QueuedTestInfo(testInfo, language));
+                }
 
             // open socket that listens for workers to connect
             using (var receiver = new PullSocket())
@@ -668,7 +674,7 @@ namespace TestRunner
 
                     factory.StartNew(() =>
                     {
-                        bool waitForWorkerConnect = teamcityTestDecoration;
+                        bool waitForWorkerConnect = commandLineArgs.ArgAsBool("waitforworkers");
                         if (waitForWorkerConnect)
                         {
                             for (int i = 0; i < normalWorkerCount; ++i)
@@ -723,9 +729,9 @@ namespace TestRunner
                                 testRunnerCmd += $" {a}={commandLineArgs.ArgAsString(a)}";
 
                             var psi = new ProcessStartInfo(Assembly.GetExecutingAssembly().Location, testRunnerCmd);
-                            psi.WindowStyle = ProcessWindowStyle.Minimized;
+                            psi.WindowStyle = ProcessWindowStyle.Hidden;
                             //psi.UseShellExecute = true;
-                            psi.CreateNoWindow = false;
+                            psi.CreateNoWindow = true;
                             var p = Process.Start(psi);
                             if (p == null)
                                 throw new InvalidOperationException("failed to start server worker (required for NoParallelTesting tests)");
@@ -744,11 +750,11 @@ namespace TestRunner
                             if (!testPassed)
                                 Interlocked.Increment(ref testsFailed);
                             var testOutput = File.ReadAllText("serverWorker.log");
-                            testOutput = TweakTestOutput(testOutput);
+                            LogTestOutput(testOutput, log);
                             Interlocked.Increment(ref testsResultsReturned);
 
-                            Console.WriteLine(testOutput);
-                            log.Write(testOutput);
+                            if (loop == 0)
+                                (testInfo.TestInfo.DoNotRunInParallel ? nonParallelTestQueue : testQueue).Enqueue(testInfo);
                         }
                         catch (Exception e)
                         {
@@ -812,6 +818,7 @@ namespace TestRunner
                                     return;
                                 }
 
+                                string testName = testInfo.TestInfo.TestMethod.Name;
                                 bool gotResult = false;
                                 try
                                 {
@@ -828,13 +835,11 @@ namespace TestRunner
                                     if (!testPassed)
                                         Interlocked.Increment(ref testsFailed);
                                     string testOutput = Encoding.UTF8.GetString(result, 1, result.Length - 1);
-                                    testOutput = TweakTestOutput(testOutput);
+                                    LogTestOutput(testOutput, log);
                                     Interlocked.Increment(ref testsResultsReturned);
-                                    if (!testOutput.IsNullOrEmpty())
-                                    {
-                                        Console.WriteLine(testOutput);
-                                        log.WriteLine(testOutput);
-                                    }
+
+                                    if (loop == 0)
+                                        testQueue.Enqueue(testInfo);
                                 }
                                 finally
                                 {
