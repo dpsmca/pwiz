@@ -600,13 +600,20 @@ namespace TestRunner
 
         private class QueuedTestInfo
         {
-            public QueuedTestInfo(TestInfo testInfo, string language)
+            public QueuedTestInfo(TestInfo testInfo, string language, int loopCount = 0)
             {
                 TestInfo = testInfo;
                 Language = language;
+                LoopCount = loopCount;
             }
             public TestInfo TestInfo { get; private set; }
             public string Language { get; private set; }
+            public int LoopCount { get; private set; }
+
+            public void IncrementLoopCount()
+            {
+                ++LoopCount;
+            }
         }
 
         private static bool PushToTestQueue(List<TestInfo> testList, CommandLineArgs commandLineArgs, StreamWriter log)
@@ -621,12 +628,15 @@ namespace TestRunner
             int testsFailed = 0;
             int testsResultsReturned = 0;
             int workerCount = (int) commandLineArgs.ArgAsLong("workercount");
-            bool teamcityTestDecoration = commandLineArgs.ArgAsBool("teamcitytestdecoration");
             int loop = (int) commandLineArgs.ArgAsLong("loop");
             bool isCanceling = false;
-            var languages = commandLineArgs.ArgAsBool("buildcheck")
-                ? new[] { "en" }
-                : commandLineArgs.ArgAsString("language").Split(',');
+            var languages = commandLineArgs.ArgAsString("language").Split(',');
+
+            if (commandLineArgs.ArgAsBool("buildcheck"))
+            {
+                loop = 1;
+                languages = new[] { "en" };
+            }
 
             Console.CancelKeyPress += (sender, args) =>
             {
@@ -636,24 +646,26 @@ namespace TestRunner
                 isCanceling = true;
             };
 
-            Action<string, StreamWriter> LogTestOutput = (testOutput, testLog) =>
+            Action<string, StreamWriter, int> LogTestOutput = (testOutput, testLog, loopCount) =>
             {
                 testOutput = testOutput.Trim(' ', '\t', '\r', '\n');
                 testOutput = Regex.Replace(testOutput, @"\d+ failures", $"{testsFailed} failures");
-                testOutput = Regex.Replace(testOutput, @"^(\[\d+:\d+\])?\s*(\d+)\.(\d+)?", $" $1 $2.{testsResultsReturned} ", RegexOptions.Multiline);
+                testOutput = Regex.Replace(testOutput, @"^(\[\d+:\d+\])?\s*(\d+)\.(\d+)?", $" $1 {loopCount}.{testsResultsReturned} ", RegexOptions.Multiline);
 
                 Console.WriteLine(testOutput);
                 testLog.WriteLine(testOutput);
             };
 
             // add tests to the queue (at least once, multiple times if loop > 1)
-            for(int i=0; i < Math.Max(1, loop); ++i)
+            for (int i = 0; i < Math.Max(1, loop); ++i)
+            {
                 foreach (var testInfo in testList)
                 {
                     var queue = testInfo.DoNotRunInParallel ? nonParallelTestQueue : testQueue;
                     foreach (var language in languages)
-                        queue.Enqueue(new QueuedTestInfo(testInfo, language));
+                        queue.Enqueue(new QueuedTestInfo(testInfo, language, i));
                 }
+            }
 
             // open socket that listens for workers to connect
             using (var receiver = new PullSocket())
@@ -750,9 +762,10 @@ namespace TestRunner
                             if (!testPassed)
                                 Interlocked.Increment(ref testsFailed);
                             var testOutput = File.ReadAllText("serverWorker.log");
-                            LogTestOutput(testOutput, log);
+                            LogTestOutput(testOutput, log, testInfo.LoopCount);
                             Interlocked.Increment(ref testsResultsReturned);
 
+                            testInfo.IncrementLoopCount();
                             if (loop == 0)
                                 (testInfo.TestInfo.DoNotRunInParallel ? nonParallelTestQueue : testQueue).Enqueue(testInfo);
                         }
@@ -835,9 +848,10 @@ namespace TestRunner
                                     if (!testPassed)
                                         Interlocked.Increment(ref testsFailed);
                                     string testOutput = Encoding.UTF8.GetString(result, 1, result.Length - 1);
-                                    LogTestOutput(testOutput, log);
+                                    LogTestOutput(testOutput, log, testInfo.LoopCount);
                                     Interlocked.Increment(ref testsResultsReturned);
 
+                                    testInfo.IncrementLoopCount();
                                     if (loop == 0)
                                         testQueue.Enqueue(testInfo);
                                 }
