@@ -223,7 +223,7 @@ namespace TestRunner
             "?;/?;-?;help;skylinetester;debug;results;" +
             "test;skip;filter;form;" +
             "loop=0;repeat=1;pause=0;startingpage=1;random=off;offscreen=on;multi=1;wait=off;internet=off;originalurls=off;" +
-            "parallelmode=off;workercount=0;waitforworkers=off;workername;queuehost;workerport;" +
+            "parallelmode=off;workercount=0;waitforworkers=off;keepworkerlogs=off;workername;queuehost;workerport;" +
             "maxsecondspertest=-1;" +
             "demo=off;showformnames=off;showpages=off;status=off;buildcheck=0;screenshotlist;" +
             "quality=off;pass0=off;pass1=off;pass2=on;" +
@@ -560,21 +560,48 @@ namespace TestRunner
         private static long MinBytesPerNormalWorker => MemoryInfo.Gibibyte * 2;
         private static long MinBytesPerBigWorker => MemoryInfo.Gibibyte * 6;
         //static bool testRequeue = true;
+        private static string DOCKER_IMAGE_NAME = "chambm/always_up_runner";
+        
+        private static void CheckDocker()
+        {
+            var dockerImagesPsi = new ProcessStartInfo("docker", $"images {DOCKER_IMAGE_NAME}")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            var dockerImages = Process.Start(dockerImagesPsi);
+            var dockerImagesReader = new ProcessStreamReader(dockerImages);
+            dockerImages?.WaitForExit();
+            var dockerImagesOutput = new StringBuilder();
+            string line;
+            while (!(line = dockerImagesReader.ReadLine()).IsNullOrEmpty())
+                dockerImagesOutput.AppendLine(line);
+
+            if (dockerImages == null || dockerImages.ExitCode != 0)
+                throw new InvalidOperationException($"'docker ps' returned an error ({dockerImagesOutput}); is Docker daemon running?");
+
+            if (!dockerImagesOutput.ToString().Contains(DOCKER_IMAGE_NAME))
+                throw new InvalidOperationException($"'{DOCKER_IMAGE_NAME}' is missing; cannot launch Docker workers without it");
+        }
 
         private static string LaunchDockerWorker(int i, CommandLineArgs commandLineArgs, ref string workerNames, bool bigWorker, int workerPort)
         {
             var pwizRoot = Path.GetDirectoryName(Path.GetDirectoryName(GetSkylineDirectory().FullName));
+            string workerName = bigWorker ? $"docker_big_worker_{i}" : $"docker_worker_{i}";
+            string dockerRunRedirect = string.Empty;
+            if (commandLineArgs.ArgAsBool("keepworkerlogs"))
+                dockerRunRedirect = $"> c:\\pwiz\\TestRunner-{workerName}-docker.log 2>1";
 
-            var testRunnerCmd = $@"c:\pwiz\pwiz_tools\Skyline\bin\x64\Release\TestRunner.exe parallelmode=client showheader=0 results=c:\AlwaysUpCLT\TestResults log=c:\AlwaysUpCLT\TestRunner.log";
+            var testRunnerCmd = $@"c:\pwiz\pwiz_tools\Skyline\bin\x64\Release\TestRunner.exe parallelmode=client showheader=0 results=c:\AlwaysUpCLT\TestResults log=c:\AlwaysUpCLT\TestRunner-{workerName}.log";
             foreach (string p in new[] { "perftests", "teamcitytestdecoration", "buildcheck" })
                 testRunnerCmd += $" {p}={commandLineArgs.ArgAsString(p)}";
             testRunnerCmd += $" workerport={workerPort}";
 
             long workerBytes = bigWorker ? MinBytesPerBigWorker : MinBytesPerNormalWorker;
-            string workerName = bigWorker ? $"docker_big_worker_{i}" : $"docker_worker_{i}";
             Console.WriteLine($"Launching {workerName}");
             workerNames = (workerNames ?? "") + $"{workerName} ";
-            var psi = new ProcessStartInfo("docker", $"run --name {workerName} -it --rm -m {workerBytes}b -v {PathEx.GetDownloadsPath()}:c:\\downloads -v {pwizRoot}:c:\\pwiz chambm/always_up_runner \"{testRunnerCmd} workername={workerName}\"");
+            var psi = new ProcessStartInfo("docker", $"run --name {workerName} -it --rm -m {workerBytes}b -v {PathEx.GetDownloadsPath()}:c:\\downloads -v {pwizRoot}:c:\\pwiz {DOCKER_IMAGE_NAME} \"{testRunnerCmd} workername={workerName}\" {dockerRunRedirect}");
             psi.WindowStyle = ProcessWindowStyle.Minimized;
             psi.CreateNoWindow = false;
             psi.UseShellExecute = true;
@@ -666,6 +693,9 @@ namespace TestRunner
                         queue.Enqueue(new QueuedTestInfo(testInfo, language, i));
                 }
             }
+
+            // check docker daemon is working and has always_up_runner
+            CheckDocker();
 
             // open socket that listens for workers to connect
             using (var receiver = new PullSocket())
