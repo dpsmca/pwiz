@@ -448,3 +448,6 @@ SkylineTester Results
 /BrowseOnly
 /x64/BrowseOnly
 /qb64.bat
+
+# JetBrains IntelliJ IDEA project files
+*.iml
