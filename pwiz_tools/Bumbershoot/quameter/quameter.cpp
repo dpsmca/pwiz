@@ -2035,23 +2035,39 @@ namespace quameter
                 peakTailingRatio = (float)peakTailing / duplicatePeptides;
 
                 // For metric DS-3A: Median ratio of precursor peak intensity to trigger intensity for all distinct matches
+                // {
+                //     accs::accumulator_set<double, accs::stats<accs::tag::percentile> > precursorTriggerIntensities;
+                //     BOOST_FOREACH(const XICWindow& distinctMatch, pepWindow)
+                //         if (distinctMatch.bestPeak && distinctMatch.PSMs.front().spectrum->precursorIntensity > 0)
+                //             precursorTriggerIntensities(distinctMatch.PSMs.front().spectrum->precursorIntensity);
+                //     double medianTriggerIntensity = accs::percentile(precursorTriggerIntensities, accs::percentile_number = 50);
+                    
+                //     accs::accumulator_set<double, accs::stats<accs::tag::percentile> > precursorPeakToTriggerIntensityRatios;
+                //     BOOST_FOREACH(const XICWindow& distinctMatch, pepWindow)
+                //         if (distinctMatch.bestPeak &&
+                //             distinctMatch.PSMs.front().spectrum->precursorIntensity > 0 &&
+                //             distinctMatch.PSMs.front().spectrum->precursorIntensity < medianTriggerIntensity)
+                //             precursorPeakToTriggerIntensityRatios(distinctMatch.bestPeak->intensity / distinctMatch.PSMs.front().spectrum->precursorIntensity);
+                //     bottomHalfSamplingRatio = accs::percentile(precursorPeakToTriggerIntensityRatios, accs::percentile_number = 50);
+                // }
                 {
+                    cout << endl << "Now checking metric DS-3A ... " << endl;
                     accs::accumulator_set<double, accs::stats<accs::tag::percentile> > precursorPeakToTriggerIntensityRatios;
                     BOOST_FOREACH(const XICWindow& distinctMatch, pepWindow)
+                    {
                         double precursorIntensity = distinctMatch.PSMs.front().spectrum->precursorIntensity;
-                        double bestPeakIntensity = -1;
-                        if(distinctMatch.bestPeak) {
-                            bestPeakIntensity = distinctMatch.bestPeak->intensity;
-                        }
-                        cout << "Precursor intensity: " << precursorIntensity << endl << "Best Peak Intensity: " << bestPeakIntensity << endl;
+                        double bestPeakIntensity = bestPeakIntensity = distinctMatch.bestPeak->intensity;
+                        cout << endl << "Precursor intensity: " << precursorIntensity << endl << "Best Peak Intensity: " << bestPeakIntensity << endl;
                         // for (int i=0; i <= 100; i += 25)
                         //     cout << " " << accs::percentile(ms2_peakPrecursorIntensities, accs::percentile_number = i);
                         // cout << endl;
 
-                        if (distinctMatch.bestPeak && MS_precursor_apex_intensity > 0)
+                        if (distinctMatch.bestPeak && MS_precursor_apex_intensity > 0) {
                             precursorPeakToTriggerIntensityRatios(bestPeakIntensity / precursorIntensity);
+                        }
+                    }
                     medianSamplingRatio = accs::percentile(precursorPeakToTriggerIntensityRatios, accs::percentile_number = 50);
-                    cout << "Median Sampling Ratio: " << medianSamplingRatio << endl << endl;
+                    cout << endl << "Median Sampling Ratio: " << medianSamplingRatio << endl << endl;
                 }
 
                 // For metric DS-3B: Median ratio of precursor peak intensity to trigger intensity for distinct matches with trigger intensity less than the median
