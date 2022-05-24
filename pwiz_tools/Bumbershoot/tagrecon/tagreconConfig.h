@@ -170,14 +170,14 @@ namespace tagrecon
             path pathToUnimodXML(UnimodXML);
             if( !pathToUnimodXML.has_parent_path() )
                 UnimodXML = (executableFilepath.parent_path() / pathToUnimodXML).string();
-            if( !exists(UnimodXML) )
-                throw runtime_error("unable to find Unimod XML \"" + UnimodXML + "\"");
+            // if( !exists(UnimodXML) )
+                // throw runtime_error("unable to find Unimod XML \"" + UnimodXML + "\"");
 
             path pathToBlosum(Blosum);
             if( !pathToBlosum.has_parent_path() )
                 Blosum = (executableFilepath.parent_path() / pathToBlosum).string();
-            if( !exists(Blosum) )
-                throw runtime_error("unable to find Blosum matrix \"" + Blosum + "\"");
+            // if( !exists(Blosum) )
+                // throw runtime_error("unable to find Blosum matrix \"" + Blosum + "\"");
 
             decoyPrefix = DecoyPrefix.empty() ? "rev_" : DecoyPrefix;
             automaticDecoys = DecoyPrefix.empty() ? false : true;
