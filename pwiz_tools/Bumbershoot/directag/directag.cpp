@@ -392,7 +392,9 @@ namespace directag
 
         rtConfig->PreComputeScoreDistributions();
 
-        INIT_PROFILERS(10)
+        // cout << endl << "RunTimeConfig:" << endl << rtConfig->getVariables(true) << endl << endl;
+
+        INIT_PROFILERS(10);
 
         // The root process parses the XML data file and distributes spectra to child processes
         g_inputFilenames.clear();
