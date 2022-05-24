@@ -61,6 +61,7 @@ bld/
 [Bb]in/
 [Oo]bj/
 [Ll]og/
+/build-*/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
@@ -450,5 +451,3 @@ SkylineTester Results
 /x64/BrowseOnly
 /qb64.bat
 
-# JetBrains IntelliJ IDEA project files
-*.iml
