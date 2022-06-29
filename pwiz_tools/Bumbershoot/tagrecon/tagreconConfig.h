@@ -41,7 +41,7 @@ using namespace pwiz;
     RTCONFIG_VARIABLE( string,          ProteinDatabase,            ""              ) \
     RTCONFIG_VARIABLE( string,          DecoyPrefix,                "rev_"          ) \
     RTCONFIG_VARIABLE( string,          UnimodXML,                    "unimod.xml"    ) \
-    RTCONFIG_VARIABLE( string,          Blosum,                        "blosum62.fas"  ) \
+    RTCONFIG_VARIABLE( string,          BlosumFile,                   "blosum62.fas"  ) \
     RTCONFIG_VARIABLE( double,          PrecursorMzTolerance,       1.25            ) \
     RTCONFIG_VARIABLE( double,          NTerminusMzTolerance,       1.5             ) \
     RTCONFIG_VARIABLE( double,          CTerminusMzTolerance,       1.25            ) \
@@ -173,11 +173,11 @@ namespace tagrecon
             if( !exists(UnimodXML) )
                 throw runtime_error("unable to find Unimod XML \"" + UnimodXML + "\"");
 
-            path pathToBlosum(Blosum);
+            path pathToBlosum(BlosumFile);
             if( !pathToBlosum.has_parent_path() )
-                Blosum = (executableFilepath.parent_path() / pathToBlosum).string();
-            if( !exists(Blosum) )
-                throw runtime_error("unable to find Blosum matrix \"" + Blosum + "\"");
+                BlosumFile = (executableFilepath.parent_path() / pathToBlosum).string();
+            // if( !exists(BlosumFile) )
+                // throw runtime_error("unable to find Blosum matrix \"" + BlosumFile + "\"");
 
             decoyPrefix = DecoyPrefix.empty() ? "rev_" : DecoyPrefix;
             automaticDecoys = DecoyPrefix.empty() ? false : true;

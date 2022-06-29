@@ -1667,6 +1667,7 @@ namespace tagrecon
         if( InitProcess( args ) )
             return 1;
 
+        cout << endl << endl << "RunTimeConfig:" << endl << g_rtConfig->getVariables(false) << endl << endl;
         //Get the database file name
         g_dbFilename = g_rtConfig->ProteinDatabase;
         //cout << g_dbFilename << "\n";

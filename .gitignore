@@ -451,3 +451,6 @@ SkylineTester Results
 /BrowseOnly
 /x64/BrowseOnly
 /qb64.bat
+
+# Visual Studio Code configuration files
+/.vscode

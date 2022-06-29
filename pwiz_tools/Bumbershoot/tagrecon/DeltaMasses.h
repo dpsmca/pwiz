@@ -118,7 +118,7 @@ namespace freicore {
                 modifications = mods;
                 if(g_rtConfig->unknownMassShiftSearchMode == MUTATIONS) {
                     // Parse out the blosum matrix
-                    blosumMatrix = new BlosumMatrix(g_rtConfig->Blosum);
+                    blosumMatrix = new BlosumMatrix(g_rtConfig->BlosumFile);
                     blosumMatrix->parseBlosumMatrix();
                     //cout << (*blosumMatrix) << endl;
                 
