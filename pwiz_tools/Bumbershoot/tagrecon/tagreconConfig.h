@@ -170,8 +170,8 @@ namespace tagrecon
             path pathToUnimodXML(UnimodXML);
             if( !pathToUnimodXML.has_parent_path() )
                 UnimodXML = (executableFilepath.parent_path() / pathToUnimodXML).string();
-            if( !exists(UnimodXML) )
-                throw runtime_error("unable to find Unimod XML \"" + UnimodXML + "\"");
+            // if( !exists(UnimodXML) )
+                // throw runtime_error("unable to find Unimod XML \"" + UnimodXML + "\"");
 
             path pathToBlosum(BlosumFile);
             if( !pathToBlosum.has_parent_path() )
