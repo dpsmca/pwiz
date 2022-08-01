@@ -378,6 +378,8 @@ namespace directag
             return 1;
         }
 
+        cout << endl << endl << "RunTimeConfig:" << endl << rtConfig->getVariables(false) << endl << endl;
+
         return 0;
     }
 
