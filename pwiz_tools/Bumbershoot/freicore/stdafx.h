@@ -38,7 +38,7 @@
 #endif
 
 /* WINDOWS ONLY INCLUDES */
-#ifdef WIN32
+#if defined(WIN32) || defined (WIN64)
     // use std min/max instead of Win32 macros
     #define NOMINMAX
 
@@ -79,9 +79,11 @@
     #include <sys/types.h>
     #include <sys/stat.h>
     #include <sys/time.h>
-#ifndef __CYGWIN__
-#include <sys/sysinfo.h>
-#endif
+    #if ! defined (__CYGWIN__)
+        #if defined(WIN32) || defined (WIN64)
+            #include <sys/sysinfo.h>
+        #endif
+    #endif
     #include <sys/wait.h>
     #include <glob.h>
     #include <dirent.h>
