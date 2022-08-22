@@ -1416,7 +1416,7 @@ namespace tagrecon
             TagMatches::const_iterator tIterEnd = tagMatches.upper_bound(cTerminalOffset - 1);
             BOOST_FOREACH(const DigestedPeptide& variant, peptideVariants)
             {
-                //cout << variant.sequence() << "," << variant.modifications().size() << endl;
+                cout << variant.sequence() << "," << variant.modifications().size() << endl;
                 boost::int64_t queryComparisonCount = QueryPeptideTagRecon( protein, variant, protein.getName(),
                                                                             isDecoy, tIterBegin, tIterEnd,
                                                                             g_rtConfig->EstimateSearchTimeOnly );
@@ -1487,6 +1487,9 @@ namespace tagrecon
         for (size_t i = 0; i < numProcessors; ++i)
             workerThreads.push_back(workerThreadGroup.create_thread(&ExecuteSearchThread));
 
+            cout << "g_numChildren: " << g_numChildren << endl;
+            cout << "numProcessors: " << numProcessors << endl;
+
         if (g_numChildren > 0)
         {
             // MPI jobs do a simple join_all
@@ -1522,10 +1525,10 @@ namespace tagrecon
                      << format_date_time("%H:%M:%S", bpt::time_duration(0, 0, elapsed.total_seconds())) << " elapsed, "
                      << format_date_time("%H:%M:%S", estimatedTimeRemaining) << " remaining." << endl;
 
-                //float candidatesPerSec = threadInfo->stats.numComparisonsDone / totalSearchTime;
-                //float estimatedTimeRemaining = float( numCandidates - threadInfo->stats.numComparisonsDone ) / candidatesPerSec / numThreads;
-                //cout << threadInfo->workerHostString << " has made " << threadInfo->stats.numComparisonsDone << " of about " << numCandidates << " comparisons; " <<
-                //        candidatesPerSec << " per second, " << estimatedTimeRemaining << " seconds remaining." << endl;
+                float candidatesPerSec = threadInfo->stats.numComparisonsDone / totalSearchTime;
+                float estimatedTimeRemaining = float( numCandidates - threadInfo->stats.numComparisonsDone ) / candidatesPerSec / numThreads;
+                cout << threadInfo->workerHostString << " has made " << threadInfo->stats.numComparisonsDone << " of about " << numCandidates << " comparisons; " <<
+                       candidatesPerSec << " per second, " << estimatedTimeRemaining << " seconds remaining." << endl;
             }
 
             // compute xcorr for top ranked results
