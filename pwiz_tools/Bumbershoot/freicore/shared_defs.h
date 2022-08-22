@@ -56,6 +56,7 @@
 
 #define COMMON_LICENSE        "Vanderbilt University (c) 2012, D.Tabb/M.Chambers/S.Dasari\n" \
                             "Licensed under the Apache License, Version 2.0\n"
+                            "Mayo Clinic mods, 2022\n"
 
 #define COMMON_RTCONFIG \
     RTCONFIG_VARIABLE( string,                WorkingDirectory,            ""                    ) \
