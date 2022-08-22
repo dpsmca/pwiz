@@ -1487,9 +1487,6 @@ namespace tagrecon
         for (size_t i = 0; i < numProcessors; ++i)
             workerThreads.push_back(workerThreadGroup.create_thread(&ExecuteSearchThread));
 
-            cout << "g_numChildren: " << g_numChildren << endl;
-            cout << "numProcessors: " << numProcessors << endl;
-
         if (g_numChildren > 0)
         {
             // MPI jobs do a simple join_all
@@ -1520,8 +1517,7 @@ namespace tagrecon
                 float proteinsPerSec = static_cast<float>(searchStatistics.numProteinsDigested) / elapsed.total_microseconds() * 1e6;
                 bpt::time_duration estimatedTimeRemaining(0, 0, round((numProteins - searchStatistics.numProteinsDigested) / proteinsPerSec));
 
-                cout << "Searched " << searchStatistics.numProteinsDigested << " of " << numProteins << " proteins at "
-                     << searchStatistics.numComparisonsDone << " comparisons performed; "
+                cout << "Searched " << searchStatistics.numProteinsDigested << " of " << numProteins << " proteins; "
                      << round(proteinsPerSec) << " per second, "
                      << format_date_time("%H:%M:%S", bpt::time_duration(0, 0, elapsed.total_seconds())) << " elapsed, "
                      << format_date_time("%H:%M:%S", estimatedTimeRemaining) << " remaining." << endl;
