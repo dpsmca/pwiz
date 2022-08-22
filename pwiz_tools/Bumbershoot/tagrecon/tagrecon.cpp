@@ -1416,7 +1416,7 @@ namespace tagrecon
             TagMatches::const_iterator tIterEnd = tagMatches.upper_bound(cTerminalOffset - 1);
             BOOST_FOREACH(const DigestedPeptide& variant, peptideVariants)
             {
-                cout << variant.sequence() << "," << variant.modifications().size() << endl;
+                // cout << variant.sequence() << "," << variant.modifications().size() << endl;
                 boost::int64_t queryComparisonCount = QueryPeptideTagRecon( protein, variant, protein.getName(),
                                                                             isDecoy, tIterBegin, tIterEnd,
                                                                             g_rtConfig->EstimateSearchTimeOnly );
