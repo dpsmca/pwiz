@@ -1520,15 +1520,16 @@ namespace tagrecon
                 float proteinsPerSec = static_cast<float>(searchStatistics.numProteinsDigested) / elapsed.total_microseconds() * 1e6;
                 bpt::time_duration estimatedTimeRemaining(0, 0, round((numProteins - searchStatistics.numProteinsDigested) / proteinsPerSec));
 
-                cout << "Searched " << searchStatistics.numProteinsDigested << " of " << numProteins << " proteins; "
+                cout << "Searched " << searchStatistics.numProteinsDigested << " of " << numProteins << " proteins at "
+                     << searchStatistics.numComparisonsDone << " comparisons performed; "
                      << round(proteinsPerSec) << " per second, "
                      << format_date_time("%H:%M:%S", bpt::time_duration(0, 0, elapsed.total_seconds())) << " elapsed, "
                      << format_date_time("%H:%M:%S", estimatedTimeRemaining) << " remaining." << endl;
 
-                float candidatesPerSec = threadInfo->stats.numComparisonsDone / totalSearchTime;
-                float estimatedTimeRemaining = float( numCandidates - threadInfo->stats.numComparisonsDone ) / candidatesPerSec / numThreads;
-                cout << threadInfo->workerHostString << " has made " << threadInfo->stats.numComparisonsDone << " of about " << numCandidates << " comparisons; " <<
-                       candidatesPerSec << " per second, " << estimatedTimeRemaining << " seconds remaining." << endl;
+                // float candidatesPerSec = threadInfo->stats.numComparisonsDone / totalSearchTime;
+                // float estimatedTimeRemaining = float( numCandidates - threadInfo->stats.numComparisonsDone ) / candidatesPerSec / numThreads;
+                // cout << threadInfo->workerHostString << " has made " << threadInfo->stats.numComparisonsDone << " of about " << numCandidates << " comparisons; " <<
+                //        candidatesPerSec << " per second, " << estimatedTimeRemaining << " seconds remaining." << endl;
             }
 
             // compute xcorr for top ranked results
