@@ -1452,7 +1452,8 @@ void executePeptideFinderTask(PeptideFinderTaskPtr peptideFinderTask, ThreadStat
                                   mappedPeptides,
                                   back_inserter(unmappedPeptides));
 
-            for (size_t i=0; i < unmappedPeptides.size() && i < 3; ++i)
+            // for (size_t i=0; i < unmappedPeptides.size() && i < 3; ++i)
+            for (size_t i=0; i < unmappedPeptides.size(); ++i)
                 unmappedPeptideMessage += " " + *unmappedPeptides[i];
 
             unmappedPeptideMessage += "; did you select the right database? "
