@@ -1445,18 +1445,22 @@ void executePeptideFinderTask(PeptideFinderTaskPtr peptideFinderTask, ThreadStat
             string unmappedPeptideMessage = lexical_cast<string>(unmappedPeptideCount) +
                                             " of " +
                                             lexical_cast<string>(targetPeptides.size()) +
-                                            " peptides did not map to the database and cannot be imported, e.g.";
+                                            // " peptides did not map to the database and cannot be imported, e.g.";
+                                            " peptides did not map to the database and cannot be imported:\n";
 
             vector<shared_string> unmappedPeptides;
             boost::set_difference(targetPeptides,
                                   mappedPeptides,
                                   back_inserter(unmappedPeptides));
 
+            unmappedPeptideMessage += "\n" + lexical_cast<string>(unmappedPeptides.size()) + " unmapped peptides found:\n";
             // for (size_t i=0; i < unmappedPeptides.size() && i < 3; ++i)
             for (size_t i=0; i < unmappedPeptides.size(); ++i)
-                unmappedPeptideMessage += " " + *unmappedPeptides[i];
+                // unmappedPeptideMessage += " " + *unmappedPeptides[i];
+                unmappedPeptideMessage += "\n" + *unmappedPeptides[i];
 
-            unmappedPeptideMessage += "; did you select the right database? "
+            // unmappedPeptideMessage += "; did you select the right database? "
+            unmappedPeptideMessage += "\n; did you select the right database? "
                                       "If you want to ignore and skip these peptides, set \"Ignore Unmapped Peptides\" to true.";
 
             if (!parser.analysis.importSettings.ignoreUnmappedPeptides)
